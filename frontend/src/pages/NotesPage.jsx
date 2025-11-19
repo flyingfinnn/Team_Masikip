@@ -75,7 +75,7 @@ const fallbackWalletState = {
   error: null,
 };
 
-function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, walletInstance = null, searchTerm = '' }) {
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, walletInstance = null, searchTerm = '', onTransactionRecorded = () => {} }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
@@ -118,8 +118,35 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     });
   };
 
-  // Filter notes based on search term
-  const filteredNotes = notes.filter((note) => {
+  // Filter notes to only show those with confirmed CREATE transactions
+  const getConfirmedNotes = (notesList, localTransactions) => {
+    if (!localTransactions || localTransactions.length === 0) {
+      // If no local transactions, show all notes (backward compatibility for old notes)
+      return notesList;
+    }
+    
+    // Create a map of confirmed CREATE transaction hashes
+    const confirmedCreateTxs = new Map();
+    localTransactions.forEach(tx => {
+      if (tx.actionType === 'CREATE' && tx.status === 'confirmed' && tx.id) {
+        confirmedCreateTxs.set(tx.id, true);
+      }
+    });
+    
+    return notesList.filter(note => {
+      // If note has no transactionHash, show it (old notes or manually created)
+      if (!note.transactionHash) {
+        return true;
+      }
+      
+      // If note has transactionHash, only show if CREATE transaction is confirmed
+      return confirmedCreateTxs.has(note.transactionHash);
+    });
+  };
+
+  // Filter notes based on search term and confirmation status
+  const confirmedNotes = getConfirmedNotes(notes, walletState.localTransactions || []);
+  const filteredNotes = confirmedNotes.filter((note) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     const titleMatch = (note.title || '').toLowerCase().includes(searchLower);
@@ -131,6 +158,28 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   useEffect(() => {
     loadNotes();
   }, []);
+
+  // Reload notes when transaction statuses change from pending to confirmed
+  useEffect(() => {
+    if (!walletState.localTransactions || walletState.localTransactions.length === 0) {
+      return;
+    }
+
+    // Check if any CREATE transactions have been confirmed
+    const hasConfirmedCreate = walletState.localTransactions.some(
+      tx => tx.actionType === 'CREATE' && tx.status === 'confirmed'
+    );
+
+    if (hasConfirmedCreate) {
+      // Reload notes to show newly confirmed ones
+      const timer = setTimeout(() => {
+        loadNotes();
+      }, 1000); // Small delay to ensure transaction status is updated in localStorage
+      
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletState.localTransactions]); // Re-run when localTransactions array reference changes
 
   const loadNotes = async () => {
     try {
@@ -148,7 +197,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         setNotes([]);
       }
     } catch (error) {
-      console.error('Failed to load notes:', error);
+      // Only log non-localhost connection errors
+      if (!error.message?.includes('localhost') && !error.message?.includes('ECONNREFUSED')) {
+        console.error('Failed to load notes:', error);
+      }
       // Fallback to empty array if backend is unavailable
       setNotes([]);
     } finally {
@@ -190,21 +242,30 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
       console.log('Current note:', currentNote);
 
-      // Send payment and update via backend API if not a local note
-      let txHash = null;
-      if (!String(noteId).startsWith('local-')) {
-        try {
-          txHash = await sendPaymentForOperation('UPDATE');
-          console.log('Updating note in backend...');
-          await noteService.updateNote(noteId, content, txHash);
-          console.log('Backend update successful');
-        } catch (error) {
-          // Error toast already shown in sendPaymentForOperation
-          throw error;
-        }
-      } else {
-        console.log('Skipping backend update for local note');
-      }
+       // Send payment and update via backend API if not a local note
+       let txHash = null;
+       if (!String(noteId).startsWith('local-')) {
+         try {
+           // Prepare metadata for UPDATE operation
+           const updateMetadata = {
+             noteId: noteId.toString(),
+             actionType: 'UPDATE',
+             contentBefore: currentNote?.content || '',
+             contentAfter: content,
+             timestamp: new Date().toISOString(),
+           }
+           
+           txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
+           console.log('Updating note in backend...');
+           await noteService.updateNote(noteId, content, txHash);
+           console.log('Backend update successful');
+         } catch (error) {
+           // Error toast already shown in sendPaymentForOperation
+           throw error;
+         }
+       } else {
+         console.log('Skipping backend update for local note');
+       }
       
       // Update local state immediately for better UX
       const updatedNotes = notes.map(note => {
@@ -253,7 +314,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     }
   };
 
-  const sendPaymentForOperation = async (operation) => {
+  const sendPaymentForOperation = async (operation, noteMetadata = {}) => {
     if (!walletInstance || !walletState.connected) {
       showToast('Wallet not connected. Please connect your wallet to perform this operation.', 'error', 4000);
       throw new Error('Wallet not connected. Please connect your wallet to perform this operation.');
@@ -274,8 +335,23 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     const requiredAmount = paymentService.getRequiredAmount(operation);
     const balance = walletState.balanceAda;
 
-    if (!paymentService.hasSufficientBalance(balance, operation)) {
-      const errorMsg = `Insufficient balance. Required: ${requiredAmount} ADA, Available: ${balance?.toFixed(2) || 0} ADA`;
+    // Check if sending to self (testing mode) - need extra for fees
+    const isSelfPayment = serviceAddress === walletState.address;
+    
+    // For DELETE operations sent to self, minimum UTXO requirement is 1 ADA
+    // So we need at least 1 ADA + fees (~0.2 ADA) = 1.2 ADA minimum
+    let minRequired = requiredAmount;
+    if (isSelfPayment) {
+      if (operation === 'DELETE' && requiredAmount < 1.0) {
+        // DELETE is 0.5 ADA, but when sending to self, need at least 1 ADA for minimum UTXO + fees
+        minRequired = 1.2; // 1 ADA minimum UTXO + 0.2 ADA fees
+      } else {
+        minRequired = requiredAmount + 0.2; // Add 0.2 ADA buffer for fees
+      }
+    }
+
+    if (!balance || balance < minRequired) {
+      const errorMsg = `Insufficient balance. Required: ${minRequired.toFixed(2)} ADA (including fees${isSelfPayment && operation === 'DELETE' ? ' and minimum UTXO' : ''}), Available: ${balance?.toFixed(2) || 0} ADA`;
       showToast(errorMsg, 'error', 5000);
       throw new Error(errorMsg);
     }
@@ -294,24 +370,60 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
     try {
       showToast(`Processing payment of ${requiredAmount} ADA...`, 'info', 3000);
-      const txHash = await paymentService.sendPayment(walletInstance, operation, serviceAddress);
+      
+      // Prepare metadata for transaction
+      const metadata = {
+        ...noteMetadata,
+        // Ensure operation is in metadata
+        operation: operation,
+      }
+      
+      const txHash = await paymentService.sendPayment(walletInstance, operation, serviceAddress, metadata);
       console.log(`${operation} payment successful:`, txHash);
       showToast(`Payment successful! Transaction: ${txHash.slice(0, 8)}...`, 'success', 5000);
+      
+      // Record transaction
+      const transaction = {
+        id: txHash,
+        type: 'debit',
+        actionType: operation, // CREATE, UPDATE, DELETE
+        label: `Note ${operation}`,
+        description: `${operation} operation payment`,
+        amount: requiredAmount,
+        currency: 'ADA',
+        timestamp: new Date().toISOString(),
+        status: 'pending', // Will be updated when confirmed
+        metadata: metadata, // Store metadata for reference
+      };
+      onTransactionRecorded(transaction);
+      
       return txHash;
     } catch (error) {
       console.error(`Payment failed for ${operation}:`, error);
-      showToast(`Payment failed: ${error.message}`, 'error', 5000);
+      const errorMsg = error?.message || 'Payment transaction failed. Please try again.';
+      showToast(`Payment failed: ${errorMsg}`, 'error', 6000);
       throw error;
     }
   };
 
   const deleteNote = async (noteId) => {
 		try {
-      // Send payment for delete operation
+      // Send payment for delete operation (even though blockchain data is immutable,
+      // we still charge for the DELETE operation to hide the note)
+      const currentNote = notes.find(n => n.id === noteId);
       let txHash = null;
       if (!String(noteId).startsWith('local-')) {
         try {
-          txHash = await sendPaymentForOperation('DELETE');
+          // Prepare metadata for DELETE operation
+          const deleteMetadata = {
+            noteId: noteId.toString(),
+            actionType: 'DELETE',
+            contentBefore: currentNote?.content || '',
+            contentAfter: '',
+            timestamp: new Date().toISOString(),
+          }
+          
+          txHash = await sendPaymentForOperation('DELETE', deleteMetadata);
         } catch (error) {
           // Error toast already shown in sendPaymentForOperation
           return;
@@ -323,7 +435,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 				await noteService.deleteNote(noteId, txHash);
 			}
 
-			// Optimistically update local state (soft delete)
+			// Soft delete: Hide note from display (data remains on blockchain)
 			const updatedNotes = notes.map(note => {
 				if (note.id === noteId) {
 					return {
@@ -487,7 +599,14 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
       
       if (!noteId || String(noteId).startsWith('local-')) {
         // Creating new note - send payment first
-        const txHash = await sendPaymentForOperation('CREATE');
+        const createMetadata = {
+          actionType: 'CREATE',
+          contentBefore: '',
+          contentAfter: content,
+          timestamp: new Date().toISOString(),
+        }
+        
+        const txHash = await sendPaymentForOperation('CREATE', createMetadata);
         const created = await noteService.createNote(title, content, txHash);
         await loadNotes();
         if (created && created.id) {
@@ -495,7 +614,16 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         }
       } else {
         // Updating existing note - send payment first
-        const txHash = await sendPaymentForOperation('UPDATE');
+        const currentNote = notes.find(n => n.id === noteId);
+        const updateMetadata = {
+          noteId: noteId.toString(),
+          actionType: 'UPDATE',
+          contentBefore: currentNote?.content || '',
+          contentAfter: content,
+          timestamp: new Date().toISOString(),
+        }
+        
+        const txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
         await noteService.updateNote(noteId, content, txHash);
         await loadNotes();
         setSelectedNoteId(noteId);

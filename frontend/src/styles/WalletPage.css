@@ -114,6 +114,40 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  gap: 16px;
+}
+
+.transaction-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sort-select {
+  background: var(--wallet-panel);
+  border: 1px solid var(--wallet-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--wallet-text);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.sort-select:hover {
+  border-color: var(--wallet-highlight);
+  background: rgba(53, 198, 149, 0.05);
+}
+
+.sort-select:focus {
+  outline: none;
+  border-color: var(--wallet-highlight);
+  background: rgba(53, 198, 149, 0.1);
+}
+
+.sort-select option {
+  background: var(--wallet-bg);
+  color: var(--wallet-text);
 }
 
 .wallet-transactions header h2 {
@@ -185,6 +219,25 @@
   color: var(--wallet-muted);
 }
 
+.txn-link {
+  color: var(--wallet-highlight);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.2s ease;
+}
+
+.txn-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.txn-link-icon {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
 .txn-details {
   display: flex;
   flex-direction: column;
@@ -206,6 +259,30 @@
 }
 
 .txn-type.debit {
+  color: var(--wallet-warning);
+}
+
+.txn-action {
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  display: inline-block;
+}
+
+.txn-action.create {
+  background: rgba(53, 198, 149, 0.15);
+  color: var(--wallet-highlight);
+}
+
+.txn-action.update {
+  background: rgba(255, 208, 0, 0.15);
+  color: #ffd000;
+}
+
+.txn-action.delete {
+  background: rgba(255, 107, 107, 0.15);
   color: var(--wallet-warning);
 }
 

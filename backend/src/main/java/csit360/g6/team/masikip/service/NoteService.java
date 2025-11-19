@@ -38,7 +38,7 @@ public class NoteService {
         newNote.setUpdatedAt(LocalDateTime.now());
         newNote.setActive(true);
         newNote.setPriority("Medium");
-        newNote.setPinned(false); // Initialize isPinned to false
+        //newNote.setPinned(false); // Initialize isPinned to false
 
         Note savedNote = noteRepository.save(newNote);
 
