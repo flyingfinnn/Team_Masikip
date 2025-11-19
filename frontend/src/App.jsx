@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { BrowserWallet } from '@meshsdk/core'
 import NotesPage from './pages/NotesPage'
 import WalletPage from './pages/WalletPage'
 import './App.css'
@@ -15,57 +16,9 @@ function App() {
   const [activeView, setActiveView] = useState('notes')
   const [walletState, setWalletState] = useState(initialWalletState)
 
-  const detectWalletProvider = () => {
-    if (typeof window === 'undefined' || !window.cardano) return null
-    const preferredOrder = ['eternl', 'nami', 'flint', 'lace', 'gerowallet', 'typhoncip30']
-    for (const key of preferredOrder) {
-      if (window.cardano[key]) {
-        const provider = window.cardano[key]
-        return {
-          key,
-          provider,
-          label: provider?.name || key.charAt(0).toUpperCase() + key.slice(1),
-        }
-      }
-    }
-
-    const dynamicKeys = Object.keys(window.cardano).filter(
-      (key) => typeof window.cardano[key] === 'object',
-    )
-
-    if (dynamicKeys.length > 0) {
-      const key = dynamicKeys[0]
-      const provider = window.cardano[key]
-      return {
-        key,
-        provider,
-        label: provider?.name || key,
-      }
-    }
-
-    return null
-  }
-
   const handleWalletButtonClick = async () => {
     if (walletState.connected) {
       setWalletState(initialWalletState)
-      return
-    }
-
-    if (typeof window === 'undefined') {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'Wallet connections are only available in the browser.',
-      }))
-      return
-    }
-
-    const walletHandle = detectWalletProvider()
-    if (!walletHandle || !walletHandle.provider?.enable) {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'No CIP-30 compatible Cardano wallet detected.',
-      }))
       return
     }
 
@@ -76,19 +29,34 @@ function App() {
         error: null,
       }))
 
-      const api = await walletHandle.provider.enable()
-      const rewardAddresses = (await api.getRewardAddresses?.()) || []
-      const usedAddresses = rewardAddresses.length
-        ? rewardAddresses
-        : (await api.getUsedAddresses?.()) || []
-      const changeAddress = await api.getChangeAddress?.()
-      const resolvedAddress = rewardAddresses[0] || usedAddresses[0] || changeAddress || ''
+      // Get available wallets
+      const availableWallets = BrowserWallet.getInstalledWallets()
+      
+      if (availableWallets.length === 0) {
+        setWalletState({
+          connected: false,
+          connecting: false,
+          address: null,
+          walletName: null,
+          error: 'No Cardano wallet detected. Please install a wallet extension.',
+        })
+        return
+      }
+
+      // Connect to the first available wallet
+      const walletName = availableWallets[0].name
+      const wallet = await BrowserWallet.enable(walletName)
+      
+      // Get the address in bech32 format (addr_test...)
+      const addresses = await wallet.getUsedAddresses()
+      const changeAddresses = await wallet.getChangeAddress()
+      const resolvedAddress = addresses[0] || changeAddresses || ''
 
       setWalletState({
         connected: true,
         connecting: false,
         address: resolvedAddress,
-        walletName: walletHandle.label,
+        walletName: walletName,
         error: null,
       })
     } catch (error) {
@@ -106,7 +74,10 @@ function App() {
   const walletButtonLabel = () => {
     if (walletState?.connecting) return 'Connecting...'
     if (walletState?.connected) {
-      return walletState.address || 'No wallet address'
+      const address = walletState.address || ''
+      const shortAddress =
+        address.length > 14 ? `${address.slice(0, 8)}...${address.slice(-6)}` : address
+      return `${walletState.walletName || 'Wallet'} · ${shortAddress}`
     }
     return 'Connect Wallet'
   }
