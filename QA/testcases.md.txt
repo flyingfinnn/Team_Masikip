@@ -1,0 +1,30 @@
+# QA Test Cases – Notes App Blockchain CRUD
+
+## TC-BLC-001: Blockchain Create
+**Steps:**
+1. Create a new note
+2. Trigger blockchain create API
+3. Check ledger for new CREATE block
+**Expected Result:** New block appears with correct data
+**Status:** Pass
+
+## TC-BLC-002: Blockchain Read
+**Steps:**
+1. Trigger read API
+2. Display blockchain ledger
+**Expected Result:** Full chain is returned
+**Status:** Pass
+
+## TC-BLC-003: Blockchain Update
+**Steps:**
+1. Edit an existing note
+2. Trigger update blockchain API
+**Expected Result:** UPDATE block added
+**Status:** Pass
+
+## TC-BLC-004: Blockchain Delete
+**Steps:**
+1. Delete note
+2. Trigger delete blockchain API
+**Expected Result:** DELETE block added
+**Status:** Fail

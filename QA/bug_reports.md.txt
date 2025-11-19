@@ -1,0 +1,35 @@
+# QA Bug Reports – Notes App Blockchain CRUD & Wallet Integration
+
+## BUG-001
+**Description:** Blockchain read endpoint returns empty when chain is not initialized  
+**Steps to Reproduce:** Trigger `/read` before any CRUD operation  
+**Expected Result:** Should return genesis block + empty chain state  
+**Actual Result:** Error 500 / empty response  
+**Status:** Fixed
+
+## BUG-002
+**Description:** UI delete button does not trigger blockchain delete API  
+**Steps to Reproduce:** Click delete on any note  
+**Expected Result:** A DELETE block should be added to the blockchain  
+**Actual Result:** No action occurs; blockchain stays unchanged  
+**Status:** Fixed
+
+## BUG-003
+**Description:** Wallet “Spent” and “Pending” dashboard values always show `N/A`  
+**Steps to Reproduce:**  
+1. Connect a valid wallet  
+2. Open the Wallet section  
+3. Check the Spent and Pending fields  
+**Expected Result:** Spent and Pending should display correct values from the connected wallet  
+**Actual Result:** Always displays `N/A`, no wallet data loaded  
+**Status:** Pending
+
+## BUG-004
+**Description:** Transaction History dashboard does not update based on Notes changes  
+**Steps to Reproduce:**  
+1. Connect a wallet  
+2. Perform CRUD operations on Notes  
+3. Check Transaction History dashboard  
+**Expected Result:** Dashboard should reflect note creation, update, or deletion  
+**Actual Result:** No updates appear; only visible on Lace extension  
+**Status:** Pending
