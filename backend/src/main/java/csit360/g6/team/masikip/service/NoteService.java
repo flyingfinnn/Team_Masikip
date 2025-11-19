@@ -1,4 +1,3 @@
-
 package csit360.g6.team.masikip.service;
 
 import csit360.g6.team.masikip.model.ActionType;
@@ -11,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,14 +24,8 @@ public class NoteService {
     @Autowired
     private NoteTransactionRepository noteTransactionRepository;
 
-    /**
-     * Creates a new note and logs the creation as the first transaction in its history.
-     * This method is transactional, meaning both operations (creating the note and its transaction log)
-     * must succeed together. If one fails, the other is rolled back.
-     */
-
     @Transactional
-    public Note createNote(String title, String content) {
+    public Note createNote(String title, String content, String walletAddress) {
         Note newNote = new Note();
         newNote.setTitle(title);
         newNote.setContent(content);
@@ -41,15 +36,7 @@ public class NoteService {
 
         Note savedNote = noteRepository.save(newNote);
 
-        NoteTransaction transaction = new NoteTransaction();
-        transaction.setNoteId(savedNote.getNoteId());
-        transaction.setActionType(ActionType.CREATE_NOTE);
-        transaction.setContentBefore(null);
-        transaction.setContentAfter(content);
-        transaction.setTimestamp(LocalDateTime.now());
-        transaction.setMetadata("Note created with title: '" + title + "'");
-
-        noteTransactionRepository.save(transaction);
+        createTransaction(savedNote.getNoteId(), ActionType.CREATE_NOTE, null, content, "Note created with title: '" + title + "'", walletAddress);
 
         return savedNote;
     }
@@ -59,7 +46,7 @@ public class NoteService {
     }
 
     @Transactional
-    public Note updateNote(Long noteId, String newContent) {
+    public Note updateNote(Long noteId, String newContent, String walletAddress) {
         Note existingNote = noteRepository.findById(noteId)
                 .orElseThrow(() -> new EntityNotFoundException("Note not found with id: " + noteId));
 
@@ -72,21 +59,13 @@ public class NoteService {
 
         Note updatedNote = noteRepository.save(existingNote);
 
-        NoteTransaction transaction = new NoteTransaction();
-        transaction.setNoteId(noteId);
-        transaction.setActionType(ActionType.UPDATE_NOTE);
-        transaction.setContentBefore(contentBefore);
-        transaction.setContentAfter(newContent);
-        transaction.setTimestamp(LocalDateTime.now());
-        transaction.setMetadata("Note content updated.");
-
-        noteTransactionRepository.save(transaction);
+        createTransaction(noteId, ActionType.UPDATE_NOTE, contentBefore, newContent, "Note content updated.", walletAddress);
 
         return updatedNote;
     }
 
     @Transactional
-    public void deleteNote(Long noteId) {
+    public void deleteNote(Long noteId, String walletAddress) {
         Note noteToDelete = noteRepository.findById(noteId)
                 .orElseThrow(() -> new EntityNotFoundException("Note not found with id: " + noteId));
 
@@ -94,18 +73,11 @@ public class NoteService {
         noteToDelete.setUpdatedAt(LocalDateTime.now());
         noteRepository.save(noteToDelete);
 
-        NoteTransaction transaction = new NoteTransaction();
-        transaction.setNoteId(noteId);
-        transaction.setActionType(ActionType.DELETE_NOTE);
-        transaction.setContentBefore(noteToDelete.getContent());
-        transaction.setContentAfter(null);
-        transaction.setTimestamp(LocalDateTime.now());
-        transaction.setMetadata("Note marked as deleted.");
-        noteTransactionRepository.save(transaction);
+        createTransaction(noteId, ActionType.DELETE_NOTE, noteToDelete.getContent(), null, "Note marked as deleted.", walletAddress);
     }
 
     @Transactional
-    public Note updateNotePriority(Long noteId, boolean isPinned) {
+    public Note updateNotePriority(Long noteId, boolean isPinned, String walletAddress) {
         Note noteToUpdate = noteRepository.findById(noteId)
                 .orElseThrow(() -> new EntityNotFoundException("Note not found with id: " + noteId));
 
@@ -117,14 +89,52 @@ public class NoteService {
 
         Note updatedNote = noteRepository.save(noteToUpdate);
 
-        NoteTransaction transaction = new NoteTransaction();
-        transaction.setNoteId(noteId);
-        transaction.setActionType(ActionType.SET_PRIORITY);
-        transaction.setTimestamp(LocalDateTime.now());
-        transaction.setMetadata("Priority changed from '" + oldPriority + "' to '" + newPriority + "'");
-
-        noteTransactionRepository.save(transaction);
+        createTransaction(noteId, ActionType.SET_PRIORITY, null, null, "Priority changed from '" + oldPriority + "' to '" + newPriority + "'", walletAddress);
 
         return updatedNote;
+    }
+
+    private void createTransaction(Long noteId, ActionType actionType, String contentBefore, String contentAfter, String metadata, String walletAddress) {
+        NoteTransaction transaction = new NoteTransaction();
+        transaction.setNoteId(noteId);
+        transaction.setActionType(actionType);
+        transaction.setContentBefore(contentBefore);
+        transaction.setContentAfter(contentAfter);
+        transaction.setTimestamp(LocalDateTime.now());
+        transaction.setMetadata(metadata);
+        transaction.setWalletAddress(walletAddress);
+
+        String previousHash = "0000000000000000000000000000000000000000000000000000000000000000"; 
+        
+        NoteTransaction lastTransaction = noteTransactionRepository.findTopByOrderByTimestampDesc();
+        if (lastTransaction != null && lastTransaction.getBlockHash() != null) {
+            previousHash = lastTransaction.getBlockHash();
+        }
+        
+        String dataToHash = previousHash + noteId + actionType.toString() + transaction.getTimestamp().toString() + (contentAfter != null ? contentAfter : "");
+        String blockHash = calculateHash(dataToHash);
+        
+        transaction.setBlockHash(blockHash);
+        transaction.setPreviousHash(previousHash);
+        
+        noteTransactionRepository.save(transaction);
+    }
+
+    private String calculateHash(String data) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] encodedhash = digest.digest(data.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder(2 * encodedhash.length);
+            for (int i = 0; i < encodedhash.length; i++) {
+                String hex = Integer.toHexString(0xff & encodedhash[i]);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("Error calculating hash", e);
+        }
     }
 }

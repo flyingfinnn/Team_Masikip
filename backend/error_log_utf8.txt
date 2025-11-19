@@ -1,0 +1,44 @@
+﻿[INFO] Scanning for projects...
+[INFO] 
+[INFO] ----------------------< csit360.g6:team.masikip >-----------------------
+[INFO] Building team.masikip 0.0.1-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] 
+[INFO] --- clean:3.4.1:clean (default-clean) @ team.masikip ---
+[INFO] Deleting D:\Uni\Code\Team_Masikip\backend\target
+[INFO] 
+[INFO] --- resources:3.3.1:resources (default-resources) @ team.masikip ---
+[INFO] Copying 1 resource from src\main\resources to target\classes
+[INFO] Copying 0 resource from src\main\resources to target\classes
+[INFO] 
+[INFO] --- compiler:3.14.0:compile (default-compile) @ team.masikip ---
+[INFO] Recompiling the module because of changed source code.
+[INFO] Compiling 12 source files with javac [debug parameters release 17] to target\classes
+[INFO] -------------------------------------------------------------
+[ERROR] COMPILATION ERROR : 
+[INFO] -------------------------------------------------------------
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[15,1] illegal start of expression
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[15,32] not a statement
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[17,1] illegal start of expression
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[48,2] reached end of file while parsing
+[INFO] 4 errors 
+[INFO] -------------------------------------------------------------
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD FAILURE
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  3.164 s
+[INFO] Finished at: 2025-11-20T00:58:33+08:00
+[INFO] ------------------------------------------------------------------------
+[ERROR] Failed to execute goal org.apache.maven.plugins:maven-compiler-plugin:3.14.0:compile (default-compile) on project team.masikip: Compilation failure: Compilation failure: 
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[15,1] illegal start of expression
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[15,32] not a statement
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[17,1] illegal start of expression
+[ERROR] /D:/Uni/Code/Team_Masikip/backend/src/main/java/csit360/g6/team/masikip/dto/CreateNoteRequest.java:[48,2] reached end of file while parsing
+[ERROR] -> [Help 1]
+[ERROR] 
+[ERROR] To see the full stack trace of the errors, re-run Maven with the -e switch.
+[ERROR] Re-run Maven using the -X switch to enable full debug logging.
+[ERROR] 
+[ERROR] For more information about the errors and possible solutions, please read the following articles:
+[ERROR] [Help 1] http://cwiki.apache.org/confluence/display/MAVEN/MojoFailureException

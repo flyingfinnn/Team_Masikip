@@ -10,4 +10,14 @@ public class UpdateNoteRequest {
     public void setContent(String content) {
         this.content = content;
     }
+
+    private String walletAddress;
+
+    public String getWalletAddress() {
+        return walletAddress;
+    }
+
+    public void setWalletAddress(String walletAddress) {
+        this.walletAddress = walletAddress;
+    }
 }

@@ -77,7 +77,7 @@ function NotesPage() {
       console.log('Attempting to load notes from backend...');
       const backendNotes = await noteService.getAllNotes();
       console.log('Backend notes loaded:', backendNotes);
-      
+
       if (Array.isArray(backendNotes)) {
         const transformedNotes = backendNotes.map(note => noteService.transformNote(note));
         console.log('Transformed notes:', transformedNotes);
@@ -99,22 +99,22 @@ function NotesPage() {
     try {
       setLoading(true);
       console.log('Creating new note...');
-      
+
       // Create note via backend API
-      const backendNote = await noteService.createNote('New Note', '');
+      const backendNote = await noteService.createNote('New Note', '', walletState.address);
       console.log('Backend note created:', backendNote);
       const newNote = noteService.transformNote(backendNote);
       console.log('Transformed note:', newNote);
-      
+
       // Update local state
       const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
       updatedNotes.unshift({ ...newNote, isSelected: true });
       setNotes(updatedNotes);
       setSelectedNoteId(newNote.id);
-      
+
     } catch (error) {
       console.error('Failed to create note:', error);
-      
+
       // Fallback to local-only note creation if backend is unavailable
       const fallbackNote = {
         id: `local-${Date.now()}`,
@@ -130,7 +130,7 @@ function NotesPage() {
         isDeleted: false,
         tags: []
       };
-      
+
       const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
       updatedNotes.unshift(fallbackNote);
       setNotes(updatedNotes);
@@ -152,7 +152,7 @@ function NotesPage() {
   const updateNote = async (noteId, content) => {
     try {
       console.log('Updating note:', { noteId, contentLength: content.length });
-      
+
       // Don't update deleted notes
       const currentNote = notes.find(note => note.id === noteId);
       if (!currentNote || currentNote.isDeleted) {
@@ -165,19 +165,19 @@ function NotesPage() {
       // Update via backend API if not a local note
       if (!String(noteId).startsWith('local-')) {
         console.log('Updating note in backend...');
-        await noteService.updateNote(noteId, content);
+        await noteService.updateNote(noteId, content, walletState.address);
         console.log('Backend update successful');
       } else {
         console.log('Skipping backend update for local note');
       }
-      
+
       // Update local state immediately for better UX
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
           const lines = content.split('\n');
           const title = lines[0] || 'New Note';
           const preview = noteService.generatePreview(content);
-          
+
           return {
             ...note,
             title: title.toUpperCase(),
@@ -190,7 +190,7 @@ function NotesPage() {
         return note;
       });
       setNotes(updatedNotes);
-      
+
     } catch (error) {
       console.error('Failed to update note:', error);
       // Still update local state even if backend fails
@@ -199,7 +199,7 @@ function NotesPage() {
           const lines = content.split('\n');
           const title = lines[0] || 'New Note';
           const preview = noteService.generatePreview(content);
-          
+
           return {
             ...note,
             title: title.toUpperCase(),
@@ -216,42 +216,42 @@ function NotesPage() {
   };
 
   const deleteNote = async (noteId) => {
-		try {
-			// Call backend for non-local notes
-			if (!String(noteId).startsWith('local-')) {
-				await noteService.deleteNote(noteId);
-			}
+    try {
+      // Call backend for non-local notes
+      if (!String(noteId).startsWith('local-')) {
+        await noteService.deleteNote(noteId, walletState.address);
+      }
 
-			// Optimistically update local state (soft delete)
-			const updatedNotes = notes.map(note => {
-				if (note.id === noteId) {
-					return {
-						...note,
-						isDeleted: true,
-						lastModified: Date.now(),
-						deletedAt: Date.now()
-					};
-				}
-				return note;
-			});
-			setNotes(updatedNotes);
-		} catch (error) {
-			console.error('Failed to delete note:', error);
-			// Still update local state even if backend fails
-			const updatedNotes = notes.map(note => {
-				if (note.id === noteId) {
-					return {
-						...note,
-						isDeleted: true,
-						lastModified: Date.now(),
-						deletedAt: Date.now()
-					};
-				}
-				return note;
-			});
-			setNotes(updatedNotes);
-		}
-	};
+      // Optimistically update local state (soft delete)
+      const updatedNotes = notes.map(note => {
+        if (note.id === noteId) {
+          return {
+            ...note,
+            isDeleted: true,
+            lastModified: Date.now(),
+            deletedAt: Date.now()
+          };
+        }
+        return note;
+      });
+      setNotes(updatedNotes);
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      // Still update local state even if backend fails
+      const updatedNotes = notes.map(note => {
+        if (note.id === noteId) {
+          return {
+            ...note,
+            isDeleted: true,
+            lastModified: Date.now(),
+            deletedAt: Date.now()
+          };
+        }
+        return note;
+      });
+      setNotes(updatedNotes);
+    }
+  };
 
   const restoreNote = (noteId) => {
     const updatedNotes = notes.map(note => {
@@ -277,7 +277,7 @@ function NotesPage() {
 
       // Update via backend API if not a local note
       if (!String(noteId).startsWith('local-')) {
-        await noteService.updateNotePriority(noteId, newIsPinned);
+        await noteService.updateNotePriority(noteId, newIsPinned, walletState.address);
       }
 
       // Update local state
@@ -322,7 +322,7 @@ function NotesPage() {
 
       // Update via backend API if not a local note
       if (!String(noteId).startsWith('local-')) {
-        await noteService.updateNotePriority(noteId, newIsPinned);
+        await noteService.updateNotePriority(noteId, newIsPinned, walletState.address);
       }
 
       // Update local state
@@ -483,7 +483,7 @@ function NotesPage() {
 
   return (
     <div className="notes-app">
-      <Sidebar 
+      <Sidebar
         notes={notes}
         loading={loading}
         onCreateNote={handleCreateNoteClick}
@@ -492,7 +492,7 @@ function NotesPage() {
         walletState={walletState}
         onWalletButtonClick={handleWalletButtonClick}
       />
-      <NoteEditor 
+      <NoteEditor
         note={selectedNote}
         onUpdateNote={updateNote}
         onTogglePin={togglePin}
@@ -504,13 +504,13 @@ function NotesPage() {
             setLoading(true);
             const title = (content.split('\n')[0] || 'New Note').toString();
             if (!noteId || String(noteId).startsWith('local-')) {
-              const created = await noteService.createNote(title, content);
+              const created = await noteService.createNote(title, content, walletState.address);
               await loadNotes();
               if (created && created.id) {
                 setSelectedNoteId(created.id);
               }
             } else {
-              await noteService.updateNote(noteId, content);
+              await noteService.updateNote(noteId, content, walletState.address);
               await loadNotes();
               setSelectedNoteId(noteId);
             }

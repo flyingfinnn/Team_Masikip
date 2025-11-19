@@ -1,4 +1,3 @@
-
 package csit360.g6.team.masikip.controller;
 
 import csit360.g6.team.masikip.dto.CreateNoteRequest;
@@ -23,7 +22,7 @@ public class NoteController {
 
     @PostMapping
     public ResponseEntity<Note> createNote(@RequestBody CreateNoteRequest request) {
-        Note createdNote = noteService.createNote(request.getTitle(), request.getContent());
+        Note createdNote = noteService.createNote(request.getTitle(), request.getContent(), request.getWalletAddress());
         return new ResponseEntity<>(createdNote, HttpStatus.CREATED);
     }
 
@@ -35,19 +34,19 @@ public class NoteController {
 
     @PutMapping("/{id}")
     public ResponseEntity<Note> updateNote(@PathVariable Long id, @RequestBody UpdateNoteRequest request) {
-        Note updatedNote = noteService.updateNote(id, request.getContent());
+        Note updatedNote = noteService.updateNote(id, request.getContent(), request.getWalletAddress());
         return ResponseEntity.ok(updatedNote);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteNote(@PathVariable Long id) {
-        noteService.deleteNote(id);
+    public ResponseEntity<Void> deleteNote(@PathVariable Long id, @RequestParam(required = false) String walletAddress) {
+        noteService.deleteNote(id, walletAddress);
         return ResponseEntity.noContent().build(); // Standard successful response for a DELETE request
     }
 
     @PatchMapping("/{id}/priority")
     public ResponseEntity<Note> updateNotePriority(@PathVariable Long id, @RequestBody UpdateNotePriorityRequest request) {
-        Note updatedNote = noteService.updateNotePriority(id, request.isPinned());
+        Note updatedNote = noteService.updateNotePriority(id, request.isPinned(), request.getWalletAddress());
         return ResponseEntity.ok(updatedNote);
     }
 }

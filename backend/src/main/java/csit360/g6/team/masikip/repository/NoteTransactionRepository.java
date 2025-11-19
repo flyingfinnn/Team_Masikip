@@ -10,4 +10,6 @@ import java.util.List;
 public interface NoteTransactionRepository extends JpaRepository<NoteTransaction, Long> {
 
     List<NoteTransaction> findByNoteIdOrderByTimestampAsc(Long noteId);
+
+    NoteTransaction findTopByOrderByTimestampDesc();
 }

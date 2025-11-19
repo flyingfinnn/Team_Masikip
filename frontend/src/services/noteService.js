@@ -12,10 +12,11 @@ const api = axios.create({
 
 class NoteService {
   // Create a new note
-  async createNote(title, content = '') {
+  async createNote(title, content = '', walletAddress = null) {
     const requestData = {
       title: title,
-      content: content
+      content: content,
+      walletAddress: walletAddress
     };
 
     console.log('Creating note with data:', requestData);
@@ -40,15 +41,16 @@ class NoteService {
   }
 
   // Update note content
-  async updateNote(noteId, content) {
-    console.log('noteService.updateNote called with:', { noteId, content });
+  async updateNote(noteId, content, walletAddress = null) {
+    console.log('noteService.updateNote called with:', { noteId, content, walletAddress });
 
     if (!noteId || noteId === 'undefined') {
       throw new Error('Invalid noteId: ' + noteId);
     }
 
     const requestData = {
-      content: content
+      content: content,
+      walletAddress: walletAddress
     };
 
     console.log('UPDATE_NOTE Transaction:', {
@@ -64,8 +66,8 @@ class NoteService {
   }
 
   // Update note priority (isPinned status)
-  async updateNotePriority(noteId, isPinned) {
-    console.log('updateNotePriority called with:', { noteId, isPinned });
+  async updateNotePriority(noteId, isPinned, walletAddress = null) {
+    console.log('updateNotePriority called with:', { noteId, isPinned, walletAddress });
 
     if (!noteId || noteId === 'undefined') {
       throw new Error('Invalid noteId for priority update: ' + noteId);
@@ -74,7 +76,8 @@ class NoteService {
     // Send both keys to be robust against DTO naming (pinned vs isPinned)
     const requestData = {
       pinned: isPinned,
-      isPinned: isPinned
+      isPinned: isPinned,
+      walletAddress: walletAddress
     };
 
     console.log('SET_PRIORITY Transaction:', {
@@ -107,7 +110,7 @@ class NoteService {
   }
 
   // Delete a note
-  async deleteNote(noteId) {
+  async deleteNote(noteId, walletAddress = null) {
     console.log('DELETE_NOTE Transaction:', {
       type: 'DELETE_NOTE',
       noteId: noteId,
@@ -115,7 +118,7 @@ class NoteService {
       blockHash: `hash-${Date.now()}`
     });
 
-    await api.delete(`/notes/${noteId}`);
+    await api.delete(`/notes/${noteId}`, { params: { walletAddress } });
     return null;
   }
 

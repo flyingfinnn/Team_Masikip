@@ -29,6 +29,10 @@ public class NoteTransaction {
 
     private String metadata; // Optional field for other data (e.g., priority change, style)
 
+    private String blockHash;
+    private String previousHash;
+    private String walletAddress;
+
 
     public Long getTransactionId() {
         return transactionId;
@@ -84,6 +88,30 @@ public class NoteTransaction {
 
     public void setMetadata(String metadata) {
         this.metadata = metadata;
+    }
+
+    public String getBlockHash() {
+        return blockHash;
+    }
+
+    public void setBlockHash(String blockHash) {
+        this.blockHash = blockHash;
+    }
+
+    public String getPreviousHash() {
+        return previousHash;
+    }
+
+    public void setPreviousHash(String previousHash) {
+        this.previousHash = previousHash;
+    }
+
+    public String getWalletAddress() {
+        return walletAddress;
+    }
+
+    public void setWalletAddress(String walletAddress) {
+        this.walletAddress = walletAddress;
     }
 }
 

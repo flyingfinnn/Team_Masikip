@@ -1,64 +1,74 @@
-import { useMemo } from 'react';
+import { useMemo, useState, useEffect } from 'react';
+import axios from 'axios';
 import '../styles/WalletPage.css';
 
-const mockTransactions = [
-  {
-    id: 'txn-1',
-    type: 'credit',
-    label: 'Note Publish Reward',
-    description: 'Reward for publishing note #452',
-    amount: 24.83,
-    currency: 'ADA',
-    timestamp: '2025-09-19T09:24:00Z',
-    status: 'confirmed',
-  },
-  {
-    id: 'txn-2',
-    type: 'debit',
-    label: 'Storage Fee',
-    description: 'Monthly IPFS storage settlement',
-    amount: 6.15,
-    currency: 'ADA',
-    timestamp: '2025-09-18T13:11:00Z',
-    status: 'confirmed',
-  },
-  {
-    id: 'txn-3',
-    type: 'credit',
-    label: 'Collaboration Tip',
-    description: 'Tip received from @masikip-core',
-    amount: 12.5,
-    currency: 'ADA',
-    timestamp: '2025-09-17T21:02:00Z',
-    status: 'pending',
-  },
-  {
-    id: 'txn-4',
-    type: 'debit',
-    label: 'Priority Compute',
-    description: 'GPU burst for AI summarizer',
-    amount: 3.85,
-    currency: 'ADA',
-    timestamp: '2025-09-17T08:44:00Z',
-    status: 'confirmed',
-  },
-];
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 function WalletPage() {
+  const [transactions, setTransactions] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/wallet/transactions`);
+        setTransactions(response.data);
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTransactions();
+    // Poll for new transactions every 5 seconds
+    const interval = setInterval(fetchTransactions, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
   const { totalSpent, totalReceived, netBalance } = useMemo(() => {
-    return mockTransactions.reduce(
+    // For this demo, we'll simulate amounts based on action types since our backend doesn't store amounts yet
+    return transactions.reduce(
       (totals, txn) => {
-        if (txn.type === 'debit') {
-          totals.totalSpent += txn.amount;
-        } else {
-          totals.totalReceived += txn.amount;
+        let amount = 0;
+        let type = 'credit';
+
+        // Simulate amounts based on action
+        switch (txn.actionType) {
+          case 'CREATE_NOTE':
+            amount = 5.00;
+            type = 'debit'; // Cost to create
+            break;
+          case 'UPDATE_NOTE':
+            amount = 1.50;
+            type = 'debit'; // Cost to update
+            break;
+          case 'DELETE_NOTE':
+            amount = 0.50;
+            type = 'debit';
+            break;
+          case 'SET_PRIORITY':
+            amount = 2.00;
+            type = 'debit';
+            break;
+          default:
+            amount = 0;
         }
-        totals.netBalance = totals.totalReceived - totals.totalSpent;
+
+        // Add some random incoming transactions for demo purposes if list is short
+        // (This logic is just for display if we don't have enough real data)
+        
+        if (type === 'debit') {
+          totals.totalSpent += amount;
+        } else {
+          totals.totalReceived += amount;
+        }
+        totals.netBalance = 1000 - totals.totalSpent; // Assume initial balance of 1000
         return totals;
       },
-      { totalSpent: 0, totalReceived: 0, netBalance: 0 },
+      { totalSpent: 0, totalReceived: 0, netBalance: 1000 }
     );
-  }, []);
+  }, [transactions]);
 
   return (
     <div className="wallet-page">
@@ -77,62 +87,70 @@ function WalletPage() {
       <div className="wallet-metrics">
         <div className="metric-card">
           <span>Received</span>
-          <p>{totalReceived.toFixed(2)} ADA</p>
-          <small>Across {mockTransactions.filter((t) => t.type === 'credit').length} inflows</small>
+          <p>1000.00 ADA</p>
+          <small>Initial Funding</small>
         </div>
         <div className="metric-card warning">
           <span>Spent</span>
           <p>{totalSpent.toFixed(2)} ADA</p>
-          <small>Auto-synced from network fees</small>
+          <small>Network Fees & Storage</small>
         </div>
         <div className="metric-card outline">
-          <span>Pending</span>
-          <p>
-            {mockTransactions
-              .filter((txn) => txn.status === 'pending')
-              .reduce((sum, txn) => sum + txn.amount, 0)
-              .toFixed(2)}{' '}
-            ADA
-          </p>
-          <small>Awaiting 2 confirmations</small>
+          <span>Total Transactions</span>
+          <p>{transactions.length}</p>
+          <small>On-chain operations</small>
         </div>
       </div>
 
       <section className="wallet-transactions">
         <header>
           <div>
-            <h2>Transaction History</h2>
-            <p>Live feed from the Cardano settlement layer</p>
+            <h2>Blockchain Ledger</h2>
+            <p>Live feed from the Masikip Private Chain</p>
           </div>
           <button type="button">Export CSV</button>
         </header>
 
         <div className="transactions-table">
           <div className="table-head">
-            <span>ID</span>
-            <span>Type</span>
+            <span>Block Hash</span>
+            <span>Action</span>
             <span>Details</span>
-            <span>Amount</span>
+            <span>Timestamp</span>
             <span>Status</span>
           </div>
 
           <div className="table-body">
-            {mockTransactions.map((txn) => (
-              <div key={txn.id} className="transaction-row">
-                <span className="txn-id">{txn.id}</span>
-                <span className={`txn-type ${txn.type}`}>{txn.type}</span>
-                <span className="txn-details">
-                  <strong>{txn.label}</strong>
-                  <small>{txn.description}</small>
-                  <small>{new Date(txn.timestamp).toLocaleString()}</small>
-                </span>
-                <span className="txn-amount">
-                  {txn.type === 'debit' ? '-' : '+'}
-                  {txn.amount.toFixed(2)} {txn.currency}
-                </span>
-                <span className={`txn-status ${txn.status}`}>{txn.status}</span>
-              </div>
-            ))}
+            {loading ? (
+              <div className="loading-row">Loading blockchain data...</div>
+            ) : (
+              transactions.map((txn) => (
+                <div key={txn.transactionId} className="transaction-row">
+                  <div className="txn-hash-col">
+                    <span className="txn-hash" title={txn.blockHash}>
+                      {txn.blockHash ? txn.blockHash.substring(0, 16) + '...' : 'Pending...'}
+                    </span>
+                    <small className="txn-prev-hash" title={txn.previousHash}>
+                      Prev: {txn.previousHash ? txn.previousHash.substring(0, 12) + '...' : 'Genesis'}
+                    </small>
+                  </div>
+                  <span className={`txn-type ${txn.actionType.toLowerCase()}`}>
+                    {txn.actionType.replace('_', ' ')}
+                  </span>
+                  <span className="txn-details">
+                    <strong>Note ID: {txn.noteId}</strong>
+                    <small>{txn.metadata}</small>
+                  </span>
+                  <span className="txn-time">
+                    {new Date(txn.timestamp).toLocaleString()}
+                  </span>
+                  <span className="txn-status confirmed">Confirmed</span>
+                </div>
+              ))
+            )}
+            {transactions.length === 0 && !loading && (
+              <div className="empty-row">No transactions found on chain.</div>
+            )}
           </div>
         </div>
       </section>
