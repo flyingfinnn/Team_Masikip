@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserWallet } from '@meshsdk/core'
 import { Address } from '@emurgo/cardano-serialization-lib-asmjs'
 import NotesPage from './pages/NotesPage'
@@ -96,22 +96,43 @@ async function fetchKoiosMetrics(address) {
 
     for (const baseUrl of candidateBases) {
       try {
-        txList = await postKoiosJson(baseUrl, '/address_txs', {
-          _addresses: [address],
-          _limit: 40,
-        })
-        selectedBase = baseUrl
-        break
+        // Try /address_tx_history first (newer endpoint)
+        try {
+          txList = await postKoiosJson(baseUrl, '/address_tx_history', {
+            _addresses: [address],
+          })
+          if (Array.isArray(txList) && txList.length > 0) {
+            selectedBase = baseUrl
+            break
+          }
+        } catch (e1) {
+          // Fall back to /address_txs
+          txList = await postKoiosJson(baseUrl, '/address_txs', {
+            _addresses: [address],
+          })
+          if (Array.isArray(txList) && txList.length > 0) {
+            selectedBase = baseUrl
+            break
+          }
+        }
+        // Limit to 40 most recent
+        if (Array.isArray(txList) && txList.length > 40) {
+          txList = txList.slice(0, 40)
+        }
       } catch (error) {
-        console.warn(`Koios base failed (${baseUrl}):`, error?.message || error)
+        // Silently fail - Koios endpoints may not be available
+        // Don't log errors to avoid console noise
       }
     }
 
     if (!selectedBase || !Array.isArray(txList)) {
+      // Return null values silently - will fall back to local transactions only
       return { spentAda: null, pendingFeesAda: null }
     }
 
-    const txHashes = txList.map((tx) => tx.tx_hash).filter(Boolean)
+    const txHashes = txList
+      .map((tx) => tx.tx_hash || tx.hash || tx.txHash || tx.id)
+      .filter(Boolean)
     if (txHashes.length === 0) {
       return { spentAda: 0, pendingFeesAda: 0 }
     }
@@ -160,16 +181,33 @@ async function fetchTransactionHistory(address) {
 
     for (const baseUrl of candidateBases) {
       try {
-        // Try the correct Koios API format
-        txList = await postKoiosJson(baseUrl, '/address_txs', {
-          _addresses: [address],
-        })
+        // Try /address_tx_history first (newer endpoint)
+        try {
+          txList = await postKoiosJson(baseUrl, '/address_tx_history', {
+            _addresses: [address],
+          })
+          if (Array.isArray(txList) && txList.length > 0) {
+            selectedBase = baseUrl
+            break
+          }
+        } catch (e1) {
+          // Fall back to /address_txs
+          try {
+            txList = await postKoiosJson(baseUrl, '/address_txs', {
+              _addresses: [address],
+            })
+            if (Array.isArray(txList) && txList.length > 0) {
+              selectedBase = baseUrl
+              break
+            }
+          } catch (e2) {
+            // Silently fail - Koios endpoints may not be available
+          }
+        }
         // Limit to 50 most recent
         if (Array.isArray(txList) && txList.length > 50) {
           txList = txList.slice(0, 50)
         }
-        selectedBase = baseUrl
-        break
       } catch (error) {
         console.warn(`Koios base failed (${baseUrl}):`, error?.message || error)
       }
@@ -179,7 +217,9 @@ async function fetchTransactionHistory(address) {
       return []
     }
 
-    const txHashes = txList.map((tx) => tx.tx_hash).filter(Boolean)
+    const txHashes = txList
+      .map((tx) => tx.tx_hash || tx.hash || tx.txHash || tx.id)
+      .filter(Boolean)
     if (txHashes.length === 0) return []
 
     const [txInfos, txStatuses] = await Promise.all([
@@ -244,38 +284,59 @@ async function fetchTransactionHistory(address) {
         }
 
         const amountAda = Lovelace.toAda(amountLovelace)
-        const status = statusMap[tx.tx_hash] || 'unknown'
+        // Determine status: confirmed if has block_time or status is confirmed
+        let status = statusMap[tx.tx_hash] || 'unknown'
+        if (tx.block_time) {
+          status = 'confirmed' // If transaction has block_time, it's confirmed
+        } else if (status === 'unknown' && !tx.block_time) {
+          // If no status from Koios and no block_time, check if recent (might be pending)
+          const txTime = tx.block_time ? new Date(tx.block_time * 1000) : null
+          if (!txTime) {
+            status = 'pending' // Likely pending if no block_time
+          }
+        }
 
         // Try to extract metadata from transaction
         let label = isDebit ? 'Payment Sent' : 'Payment Received'
         let description = `Transaction ${tx.tx_hash.slice(0, 8)}...`
 
         // Check if this looks like a note operation payment
+        let actionType = null
         if (amountAda >= 0.5 && amountAda <= 2.5) {
           if (amountAda >= 1.9 && amountAda <= 2.1) {
+            actionType = 'CREATE'
             label = 'Note Creation Payment'
             description = 'Payment for creating a new note'
           } else if (amountAda >= 0.9 && amountAda <= 1.1) {
+            actionType = 'UPDATE'
             label = 'Note Update Payment'
             description = 'Payment for updating a note'
           } else if (amountAda >= 0.4 && amountAda <= 0.6) {
+            actionType = 'DELETE'
             label = 'Note Deletion Payment'
             description = 'Payment for deleting a note'
           }
         }
 
+        const txHash = tx.tx_hash || tx.hash || tx.txHash || tx.id
+        if (!txHash) {
+          return null // Skip transactions without hash
+        }
+        
         return {
-          id: tx.tx_hash,
+          id: txHash,
           type: isDebit ? 'debit' : 'credit',
-          label,
-          description,
-          amount: amountAda,
+          actionType: actionType, // CREATE, UPDATE, DELETE, or null
+          label: label || (isDebit ? 'Payment Sent' : 'Payment Received'),
+          description: description || `Transaction ${txHash.slice(0, 8)}...`,
+          amount: amountAda || 0,
           currency: 'ADA',
           timestamp: tx?.block_time ? new Date(tx.block_time * 1000).toISOString() : new Date().toISOString(),
-          status: status === 'confirmed' ? 'confirmed' : 'pending',
+          status: status, // Use determined status from above
+          block_time: tx?.block_time, // Store block_time for confirmation checks
         }
       })
-      .filter((tx) => tx.amount > 0) // Filter out zero-amount transactions
+      .filter((tx) => tx && tx.id && tx.amount > 0) // Filter out null, zero-amount, or missing id transactions
       .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)) // Sort by newest first
 
     return transactions || []
@@ -360,6 +421,43 @@ const getWalletBalanceAda = async (wallet) => {
   }
 }
 
+// Transaction storage key for localStorage
+const TRANSACTION_STORAGE_KEY = 'masikip_transactions'
+
+// Load transactions from localStorage
+const loadStoredTransactions = (address) => {
+  if (!address) return []
+  try {
+    const stored = localStorage.getItem(TRANSACTION_STORAGE_KEY)
+    if (!stored) return []
+    const allTransactions = JSON.parse(stored)
+    return allTransactions[address] || []
+  } catch (error) {
+    console.error('Failed to load stored transactions:', error)
+    return []
+  }
+}
+
+// Save transaction to localStorage
+const saveTransaction = (address, transaction) => {
+  if (!address) return
+  try {
+    const stored = localStorage.getItem(TRANSACTION_STORAGE_KEY)
+    const allTransactions = stored ? JSON.parse(stored) : {}
+    if (!allTransactions[address]) {
+      allTransactions[address] = []
+    }
+    allTransactions[address].unshift(transaction) // Add to beginning
+    // Keep only last 100 transactions per address
+    if (allTransactions[address].length > 100) {
+      allTransactions[address] = allTransactions[address].slice(0, 100)
+    }
+    localStorage.setItem(TRANSACTION_STORAGE_KEY, JSON.stringify(allTransactions))
+  } catch (error) {
+    console.error('Failed to save transaction:', error)
+  }
+}
+
 const initialWalletState = {
   connected: false,
   connecting: false,
@@ -370,12 +468,111 @@ const initialWalletState = {
   spentAda: null,
   pendingFeesAda: null,
   walletInstance: null, // Store the actual wallet instance for payments
+  localTransactions: [], // Store local payment transactions
 }
 
 function App() {
   const [activeView, setActiveView] = useState('notes')
   const [walletState, setWalletState] = useState(initialWalletState)
   const [searchTerm, setSearchTerm] = useState('')
+
+  // Function to recalculate spent/pending from local transactions
+  const recalculateSpentPending = (localTxs, koiosMetrics) => {
+    // Calculate spent from confirmed debit transactions
+    const localSpent = (localTxs || [])
+      .filter((tx) => tx.type === 'debit' && tx.status === 'confirmed')
+      .reduce((sum, tx) => sum + (tx.amount || 0), 0)
+
+    // Calculate pending from pending transactions (both debit amounts and fees)
+    const localPending = (localTxs || [])
+      .filter((tx) => tx.status === 'pending')
+      .reduce((sum, tx) => sum + (tx.amount || 0), 0)
+
+    // Combine Koios and local metrics
+    const totalSpent = (koiosMetrics?.spentAda ?? 0) + localSpent
+    const totalPending = (koiosMetrics?.pendingFeesAda ?? 0) + localPending
+
+    return {
+      spentAda: totalSpent > 0 ? totalSpent : null,
+      pendingFeesAda: totalPending > 0 ? totalPending : null,
+    }
+  }
+
+  // Periodically check and update transaction statuses
+  useEffect(() => {
+    if (!walletState.connected || !walletState.address) return
+
+    const checkTransactionStatuses = async () => {
+      try {
+        // Reload local transactions from storage to get latest
+        const storedLocalTxs = loadStoredTransactions(walletState.address)
+        
+        // Check for pending transactions older than 2 minutes
+        const updatedTxs = storedLocalTxs.map((tx) => {
+          if (tx.status === 'pending' && tx.timestamp) {
+            const txAge = Date.now() - new Date(tx.timestamp).getTime()
+            // If transaction is older than 2 minutes, likely confirmed (Cardano blocks ~20 seconds)
+            if (txAge > 120000) {
+              return { ...tx, status: 'confirmed' }
+            }
+          }
+          return tx
+        })
+
+        // Check if any transactions were updated
+        const hasUpdates = updatedTxs.some((tx, idx) => 
+          tx.status === 'confirmed' && storedLocalTxs[idx]?.status === 'pending'
+        )
+
+        if (hasUpdates) {
+          // Update localStorage
+          const stored = localStorage.getItem(TRANSACTION_STORAGE_KEY)
+          const allTransactions = stored ? JSON.parse(stored) : {}
+          allTransactions[walletState.address] = updatedTxs
+          localStorage.setItem(TRANSACTION_STORAGE_KEY, JSON.stringify(allTransactions))
+
+          // Recalculate spent/pending with updated statuses
+          const koiosMetrics = await (walletState.address ? fetchKoiosMetrics(walletState.address).catch(() => ({})) : Promise.resolve({}))
+          const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedTxs, koiosMetrics)
+
+          // Update wallet state with recalculated values
+          setWalletState((prev) => ({
+            ...prev,
+            localTransactions: updatedTxs,
+            spentAda,
+            pendingFeesAda,
+          }))
+        } else {
+          // Even if no updates, recalculate to ensure consistency
+          const koiosMetrics = await (walletState.address ? fetchKoiosMetrics(walletState.address).catch(() => ({})) : Promise.resolve({}))
+          const { spentAda, pendingFeesAda } = recalculateSpentPending(storedLocalTxs, koiosMetrics)
+          
+          // Only update if values changed
+          setWalletState((prev) => {
+            if (prev.spentAda !== spentAda || prev.pendingFeesAda !== pendingFeesAda) {
+              return {
+                ...prev,
+                localTransactions: storedLocalTxs,
+                spentAda,
+                pendingFeesAda,
+              }
+            }
+            return prev
+          })
+        }
+      } catch (error) {
+        console.error('Failed to check transaction statuses:', error)
+      }
+    }
+
+    // Check immediately
+    checkTransactionStatuses()
+
+    // Check every 30 seconds for status updates
+    const interval = setInterval(checkTransactionStatuses, 30000)
+
+    return () => clearInterval(interval)
+  }, [walletState.connected, walletState.address])
 
   const handleWalletButtonClick = async () => {
     if (walletState.connected) {
@@ -413,10 +610,16 @@ function App() {
       const changeAddresses = await wallet.getChangeAddress()
       const resolvedAddress = toBech32Address(addresses[0] || changeAddresses || '')
 
+      // Load stored local transactions
+      const localTransactions = loadStoredTransactions(resolvedAddress)
+
       const [balanceAda, koiosMetrics] = await Promise.all([
         getWalletBalanceAda(wallet),
         resolvedAddress ? fetchKoiosMetrics(resolvedAddress) : Promise.resolve({}),
       ])
+
+      // Calculate spent and pending from local transactions
+      const { spentAda, pendingFeesAda } = recalculateSpentPending(localTransactions, koiosMetrics)
 
       setWalletState({
         connected: true,
@@ -424,9 +627,10 @@ function App() {
         address: resolvedAddress,
         walletName: walletName,
         balanceAda,
-        spentAda: koiosMetrics?.spentAda ?? null,
-        pendingFeesAda: koiosMetrics?.pendingFeesAda ?? null,
-        walletInstance: wallet, // Store wallet instance for payments
+        spentAda,
+        pendingFeesAda,
+        walletInstance: wallet,
+        localTransactions,
         error: null,
       })
     } catch (error) {
@@ -517,16 +721,65 @@ function App() {
           <WalletPage 
             walletState={walletState} 
             fetchTransactionHistory={fetchTransactionHistory}
+            onTransactionRecorded={async (transaction) => {
+              // Update local transactions in state
+              const updatedLocal = [transaction, ...(walletState.localTransactions || [])]
+              
+              // Save to localStorage first
+              if (walletState.address) {
+                saveTransaction(walletState.address, transaction)
+              }
+              
+              // Recalculate spent/pending with updated transactions
+              const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
+              const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedLocal, koiosMetrics)
+              
+              setWalletState((prev) => ({
+                ...prev,
+                localTransactions: updatedLocal,
+                spentAda,
+                pendingFeesAda,
+              }))
+            }}
+            onStatusUpdate={async (updatedTransactions) => {
+              // Called when WalletPage detects status updates - immediately recalculate
+              const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
+              const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedTransactions, koiosMetrics)
+              
+              setWalletState((prev) => ({
+                ...prev,
+                localTransactions: updatedTransactions,
+                spentAda,
+                pendingFeesAda,
+              }))
+            }}
           />
         ) : (
           <NotesPage 
-            
             walletState={walletState} 
-            
             onWalletButtonClick={handleWalletButtonClick}
             walletInstance={walletState.walletInstance}
-         
             searchTerm={searchTerm}
+            onTransactionRecorded={async (transaction) => {
+              // Update local transactions in state
+              const updatedLocal = [transaction, ...(walletState.localTransactions || [])]
+              
+              // Save to localStorage first
+              if (walletState.address) {
+                saveTransaction(walletState.address, transaction)
+              }
+              
+              // Recalculate spent/pending with updated transactions
+              const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
+              const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedLocal, koiosMetrics)
+              
+              setWalletState((prev) => ({
+                ...prev,
+                localTransactions: updatedLocal,
+                spentAda,
+                pendingFeesAda,
+              }))
+            }}
           />
         )}
       </main>

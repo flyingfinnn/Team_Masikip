@@ -3,6 +3,16 @@ import axios from 'axios';
 // API service for backend communication
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
+// Suppress console warnings for localhost in development
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  const message = args.join(' ');
+  if (message.includes('localhost') || message.includes('Localhost')) {
+    return; // Suppress localhost warnings
+  }
+  originalWarn.apply(console, args);
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -168,7 +178,8 @@ class NoteService {
       isDeleted: isDeleted, // Use calculated value
       isSelected: false,
       tags: backendNote.tags || [],
-      deletedAt: isDeleted ? new Date(backendNote.updatedAt || now).getTime() : undefined
+      deletedAt: isDeleted ? new Date(backendNote.updatedAt || now).getTime() : undefined,
+      transactionHash: backendNote.transactionHash || backendNote.transaction_hash || null // Include transaction hash for confirmation checking
     };
 
     console.log('Transformed note:', transformed);
