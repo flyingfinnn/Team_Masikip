@@ -57,18 +57,6 @@ function NotesGallery({
     return sortedNotes;
   }, [notes, searchTerm, showPinnedOnly, sortKey]);
 
-  const formatWalletLabel = () => {
-    if (walletState?.connecting) return 'Connecting...';
-    if (walletState?.connected) {
-      const walletName = walletState.walletName || 'Wallet';
-      const addr = walletState.address || '';
-      const shortAddress =
-        addr.length > 10 ? `${addr.slice(0, 8)}...${addr.slice(-4)}` : addr;
-      return `${walletName} · ${shortAddress}`;
-    }
-    return 'Connect Wallet';
-  };
-
   const handleNoteClick = (noteId) => {
     if (typeof onSelectNote === 'function') {
       onSelectNote(noteId);
@@ -120,19 +108,6 @@ function NotesGallery({
             }
           >
             ⇅ Sort: {sortKey === 'updated' ? 'Last Edited' : sortKey === 'created' ? 'Creation' : 'Priority'}
-          </button>
-          <button
-            className={`ghost-btn wallet-btn ${walletState?.connected ? 'connected' : ''}`}
-            type="button"
-            onClick={onWalletButtonClick}
-            disabled={walletState?.connecting}
-            title={
-              walletState?.connected
-                ? walletState.address
-                : walletState?.error || 'Connect your Cardano wallet'
-            }
-          >
-            {formatWalletLabel()}
           </button>
           <button
             className="ghost-btn"

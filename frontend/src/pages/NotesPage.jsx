@@ -53,21 +53,21 @@ import '../styles/NotesPage.css';
  * - transactionData: Note operation data
  * - signature: Digital signature for authenticity
  */
-function NotesPage() {
+const fallbackWalletState = {
+  connected: false,
+  connecting: false,
+  address: null,
+  walletName: null,
+  error: null,
+};
+
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {} }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // gallery | workspace
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalNote, setModalNote] = useState(null);
-  const initialWalletState = {
-    connected: false,
-    connecting: false,
-    address: null,
-    walletName: null,
-    error: null
-  };
-  const [walletState, setWalletState] = useState(initialWalletState);
 
   // Load notes from backend on component mount
   useEffect(() => {
@@ -319,94 +319,6 @@ function NotesPage() {
     }
   };
 
-  const detectWalletProvider = () => {
-    if (typeof window === 'undefined' || !window.cardano) return null;
-    const preferredOrder = ['eternl', 'nami', 'flint', 'lace', 'gerowallet', 'typhoncip30'];
-    for (const key of preferredOrder) {
-      if (window.cardano[key]) {
-        const provider = window.cardano[key];
-        return {
-          key,
-          provider,
-          label: provider?.name || key.charAt(0).toUpperCase() + key.slice(1)
-        };
-      }
-    }
-
-    const dynamicKeys = Object.keys(window.cardano).filter(
-      (key) => typeof window.cardano[key] === 'object'
-    );
-
-    if (dynamicKeys.length > 0) {
-      const key = dynamicKeys[0];
-      const provider = window.cardano[key];
-      return {
-        key,
-        provider,
-        label: provider?.name || key
-      };
-    }
-
-    return null;
-  };
-
-  const handleWalletButtonClick = async () => {
-    if (walletState.connected) {
-      setWalletState(initialWalletState);
-      return;
-    }
-
-    if (typeof window === 'undefined') {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'Wallet connections are only available in the browser.'
-      }));
-      return;
-    }
-
-    const walletHandle = detectWalletProvider();
-    if (!walletHandle || !walletHandle.provider?.enable) {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'No CIP-30 compatible Cardano wallet detected.'
-      }));
-      return;
-    }
-
-    try {
-      setWalletState((prev) => ({
-        ...prev,
-        connecting: true,
-        error: null
-      }));
-
-      const api = await walletHandle.provider.enable();
-      const rewardAddresses = (await api.getRewardAddresses?.()) || [];
-      const usedAddresses = rewardAddresses.length
-        ? rewardAddresses
-        : (await api.getUsedAddresses?.()) || [];
-      const changeAddress = await api.getChangeAddress?.();
-      const resolvedAddress = rewardAddresses[0] || usedAddresses[0] || changeAddress || '';
-
-      setWalletState({
-        connected: true,
-        connecting: false,
-        address: resolvedAddress,
-        walletName: walletHandle.label,
-        error: null
-      });
-    } catch (error) {
-      console.error('Wallet connection failed:', error);
-      setWalletState({
-        connected: false,
-        connecting: false,
-        address: null,
-        walletName: null,
-        error: error?.message || 'Wallet connection failed. Please try again.'
-      });
-    }
-  };
-
   const handleCreateNoteClick = () => {
     createNewNote();
   };
@@ -473,8 +385,7 @@ function NotesPage() {
           onDeleteNote={deleteNote}
           onTogglePin={togglePin}
           walletState={walletState}
-          onWalletButtonClick={handleWalletButtonClick}
-        />
+          />
       ) : (
         <div className="notes-app">
           <Sidebar 
@@ -484,7 +395,7 @@ function NotesPage() {
             onSelectNote={selectNote}
             onBackToGallery={handleBackToGallery}
             walletState={walletState}
-            onWalletButtonClick={handleWalletButtonClick}
+            onWalletButtonClick={onWalletButtonClick}
           />
           <NoteEditor 
             note={selectedNote}

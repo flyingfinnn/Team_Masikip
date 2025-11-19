@@ -277,11 +277,6 @@
   border-radius: 24px;
 }
 
-.wallet-btn.connected {
-  border-color: rgba(90, 200, 250, 0.6);
-  background: rgba(90, 200, 250, 0.1);
-}
-
 .wallet-error {
   margin-top: 24px;
   padding: 12px 16px;

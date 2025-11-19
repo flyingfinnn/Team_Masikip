@@ -58,7 +58,15 @@ body {
 
 .nav-actions {
   display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-switch {
+  display: flex;
   gap: 12px;
+  padding-left: 16px;
+  border-left: 1px solid var(--nav-border);
 }
 
 .nav-btn {
@@ -81,6 +89,27 @@ body {
   background: rgba(53, 198, 149, 0.15);
   border-color: rgba(53, 198, 149, 0.35);
   color: var(--nav-text);
+}
+
+.nav-btn.wallet-connect {
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--nav-text);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-all;
+  padding: 10px 16px;
+}
+
+.nav-btn.wallet-connect.connected {
+  background: rgba(53, 198, 149, 0.2);
+  border-color: rgba(53, 198, 149, 0.5);
+}
+
+.nav-btn.wallet-connect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .app-content {

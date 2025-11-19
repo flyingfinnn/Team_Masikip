@@ -44,7 +44,9 @@ const mockTransactions = [
   },
 ];
 
-function WalletPage() {
+function WalletPage({ walletState = {} }) {
+  const walletName = walletState?.walletName || 'Masikip Vault';
+  const displayAddress = walletState?.address || 'No wallet connected';
   const { totalSpent, totalReceived, netBalance } = useMemo(() => {
     return mockTransactions.reduce(
       (totals, txn) => {
@@ -65,8 +67,8 @@ function WalletPage() {
       <div className="wallet-page__header">
         <div>
           <p className="wallet-label">Active Wallet</p>
-          <h1>Masikip Vault</h1>
-          <p className="wallet-address">addr1qxy...8f4d</p>
+          <h1>{walletName}</h1>
+          <p className="wallet-address">{displayAddress}</p>
         </div>
         <div className="wallet-net">
           <span>Net Balance</span>
