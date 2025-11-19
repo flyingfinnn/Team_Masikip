@@ -1,66 +1,34 @@
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import '../styles/WalletPage.css';
 
-const mockTransactions = [
-  {
-    id: 'txn-1',
-    type: 'credit',
-    label: 'Note Publish Reward',
-    description: 'Reward for publishing note #452',
-    amount: 24.83,
-    currency: 'ADA',
-    timestamp: '2025-09-19T09:24:00Z',
-    status: 'confirmed',
-  },
-  {
-    id: 'txn-2',
-    type: 'debit',
-    label: 'Storage Fee',
-    description: 'Monthly IPFS storage settlement',
-    amount: 6.15,
-    currency: 'ADA',
-    timestamp: '2025-09-18T13:11:00Z',
-    status: 'confirmed',
-  },
-  {
-    id: 'txn-3',
-    type: 'credit',
-    label: 'Collaboration Tip',
-    description: 'Tip received from @masikip-core',
-    amount: 12.5,
-    currency: 'ADA',
-    timestamp: '2025-09-17T21:02:00Z',
-    status: 'pending',
-  },
-  {
-    id: 'txn-4',
-    type: 'debit',
-    label: 'Priority Compute',
-    description: 'GPU burst for AI summarizer',
-    amount: 3.85,
-    currency: 'ADA',
-    timestamp: '2025-09-17T08:44:00Z',
-    status: 'confirmed',
-  },
-];
-
-function WalletPage({ walletState = {} }) {
+function WalletPage({ walletState = {}, fetchTransactionHistory }) {
+  const [transactions, setTransactions] = useState([]);
+  const [loadingTxs, setLoadingTxs] = useState(false);
+  
+  const isConnected = walletState?.connected === true;
   const walletName = walletState?.walletName || 'Ledgee Vault';
   const displayAddress = walletState?.address || 'No wallet connected';
-  const { totalSpent, totalReceived, netBalance } = useMemo(() => {
-    return mockTransactions.reduce(
-      (totals, txn) => {
-        if (txn.type === 'debit') {
-          totals.totalSpent += txn.amount;
-        } else {
-          totals.totalReceived += txn.amount;
-        }
-        totals.netBalance = totals.totalReceived - totals.totalSpent;
-        return totals;
-      },
-      { totalSpent: 0, totalReceived: 0, netBalance: 0 },
-    );
-  }, []);
+  const liveBalance = typeof walletState?.balanceAda === 'number' ? walletState.balanceAda : null;
+  const spentAda = typeof walletState?.spentAda === 'number' ? walletState.spentAda : null;
+  const pendingFeesAda = typeof walletState?.pendingFeesAda === 'number' ? walletState.pendingFeesAda : null;
+
+  useEffect(() => {
+    if (isConnected && walletState?.address && fetchTransactionHistory) {
+      setLoadingTxs(true);
+      fetchTransactionHistory(walletState.address)
+        .then((txs) => {
+          setTransactions(txs);
+          setLoadingTxs(false);
+        })
+        .catch((error) => {
+          console.error('Failed to load transaction history:', error);
+          setTransactions([]);
+          setLoadingTxs(false);
+        });
+    } else {
+      setTransactions([]);
+    }
+  }, [isConnected, walletState?.address, fetchTransactionHistory]);
 
   return (
     <div className="wallet-page">
@@ -72,31 +40,44 @@ function WalletPage({ walletState = {} }) {
         </div>
         <div className="wallet-net">
           <span>Net Balance</span>
-          <strong>{netBalance.toFixed(2)} ADA</strong>
+          <strong>
+            {isConnected && liveBalance != null
+              ? `${liveBalance.toFixed(2)} ADA`
+              : 'N/A'}
+          </strong>
         </div>
       </div>
 
       <div className="wallet-metrics">
-        <div className="metric-card">
-          <span>Received</span>
-          <p>{totalReceived.toFixed(2)} ADA</p>
-          <small>Across {mockTransactions.filter((t) => t.type === 'credit').length} inflows</small>
-        </div>
         <div className="metric-card warning">
           <span>Spent</span>
-          <p>{totalSpent.toFixed(2)} ADA</p>
-          <small>Auto-synced from network fees</small>
+          <p>
+            {isConnected && spentAda != null
+              ? `${spentAda.toFixed(2)} ADA`
+              : 'N/A'}
+          </p>
+          <small>
+            {isConnected && spentAda != null
+              ? 'Koios (last 40 tx)'
+              : isConnected
+              ? 'Loading...'
+              : 'Connect wallet to view'}
+          </small>
         </div>
         <div className="metric-card outline">
           <span>Pending</span>
           <p>
-            {mockTransactions
-              .filter((txn) => txn.status === 'pending')
-              .reduce((sum, txn) => sum + txn.amount, 0)
-              .toFixed(2)}{' '}
-            ADA
+            {isConnected && pendingFeesAda != null
+              ? `${pendingFeesAda.toFixed(2)} ADA`
+              : 'N/A'}
           </p>
-          <small>Awaiting 2 confirmations</small>
+          <small>
+            {isConnected && pendingFeesAda != null
+              ? 'Pending fees (Koios)'
+              : isConnected
+              ? 'Loading...'
+              : 'Connect wallet to view'}
+          </small>
         </div>
       </div>
 
@@ -119,22 +100,38 @@ function WalletPage({ walletState = {} }) {
           </div>
 
           <div className="table-body">
-            {mockTransactions.map((txn) => (
-              <div key={txn.id} className="transaction-row">
-                <span className="txn-id">{txn.id}</span>
-                <span className={`txn-type ${txn.type}`}>{txn.type}</span>
-                <span className="txn-details">
-                  <strong>{txn.label}</strong>
-                  <small>{txn.description}</small>
-                  <small>{new Date(txn.timestamp).toLocaleString()}</small>
+            {loadingTxs ? (
+              <div className="transaction-row">
+                <span colSpan="5" style={{ textAlign: 'center', padding: '20px' }}>
+                  Loading transaction history...
                 </span>
-                <span className="txn-amount">
-                  {txn.type === 'debit' ? '-' : '+'}
-                  {txn.amount.toFixed(2)} {txn.currency}
-                </span>
-                <span className={`txn-status ${txn.status}`}>{txn.status}</span>
               </div>
-            ))}
+            ) : transactions.length === 0 ? (
+              <div className="transaction-row">
+                <span colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.5)' }}>
+                  {isConnected ? 'No transactions found' : 'Connect wallet to view transactions'}
+                </span>
+              </div>
+            ) : (
+              transactions.map((txn) => (
+                <div key={txn.id} className="transaction-row">
+                  <span className="txn-id" title={txn.id}>
+                    {txn.id.slice(0, 8)}...{txn.id.slice(-6)}
+                  </span>
+                  <span className={`txn-type ${txn.type}`}>{txn.type}</span>
+                  <span className="txn-details">
+                    <strong>{txn.label}</strong>
+                    <small>{txn.description}</small>
+                    <small>{new Date(txn.timestamp).toLocaleString()}</small>
+                  </span>
+                  <span className="txn-amount">
+                    {txn.type === 'debit' ? '-' : '+'}
+                    {txn.amount.toFixed(2)} {txn.currency}
+                  </span>
+                  <span className={`txn-status ${txn.status}`}>{txn.status}</span>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </section>

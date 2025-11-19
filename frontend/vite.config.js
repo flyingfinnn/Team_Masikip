@@ -29,4 +29,23 @@ export default defineConfig({
     },
     include: ['buffer', 'events', 'util', 'stream'],
   },
+  server: {
+    proxy: {
+      '/koios-mainnet': {
+        target: 'https://api.koios.rest/api/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/koios-mainnet/, ''),
+      },
+      '/koios-preprod': {
+        target: 'https://preprod.koios.rest/api/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/koios-preprod/, ''),
+      },
+      '/koios-preview': {
+        target: 'https://preview.koios.rest/api/v1',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/koios-preview/, ''),
+      },
+    },
+  },
 })

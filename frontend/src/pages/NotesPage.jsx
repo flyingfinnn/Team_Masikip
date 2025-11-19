@@ -3,8 +3,22 @@ import Sidebar from '../components/Sidebar';
 import NoteEditor from '../components/NoteEditor';
 import NotesGallery from '../components/NotesGallery';
 import NoteModal from '../components/NoteModal';
+import ToastContainer from '../components/ToastContainer';
 import noteService from '../services/noteService';
+import paymentService from '../services/paymentService';
 import '../styles/NotesPage.css';
+
+// Service address to receive payments
+// Set via environment variable: VITE_SERVICE_ADDRESS
+// If not set, will use wallet's own address as fallback (for testing only)
+const getServiceAddress = (walletAddress) => {
+  const envAddress = import.meta.env.VITE_SERVICE_ADDRESS;
+  if (envAddress && !envAddress.includes('...')) {
+    return envAddress;
+  }
+  // Fallback to wallet's own address for testing (payments go back to user)
+  return walletAddress;
+};
 
 /**
  * BLOCKCHAIN INTEGRATION ROADMAP
@@ -61,13 +75,48 @@ const fallbackWalletState = {
   error: null,
 };
 
-function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, searchTerm = '' }) {
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, walletInstance = null, searchTerm = '' }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // gallery | workspace
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalNote, setModalNote] = useState(null);
+  const [toasts, setToasts] = useState([]);
+
+  const showToast = (message, type = 'info', duration = 5000) => {
+    const id = Date.now() + Math.random();
+    setToasts((prev) => [...prev, { id, message, type, duration }]);
+    return id;
+  };
+
+  const removeToast = (id) => {
+    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+  };
+
+  const showConfirmToast = (message, onConfirm, onCancel) => {
+    return new Promise((resolve) => {
+      const id = Date.now() + Math.random();
+      const toast = {
+        id,
+        message,
+        type: 'confirm',
+        duration: 0,
+        showActions: true,
+        onConfirm: () => {
+          if (onConfirm) onConfirm();
+          resolve(true);
+          removeToast(id);
+        },
+        onCancel: () => {
+          if (onCancel) onCancel();
+          resolve(false);
+          removeToast(id);
+        },
+      };
+      setToasts((prev) => [...prev, toast]);
+    });
+  };
 
   // Filter notes based on search term
   const filteredNotes = notes.filter((note) => {
@@ -108,6 +157,12 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   };
 
   const createNewNote = async () => {
+    // Check if wallet is connected
+    if (!walletState.connected || !walletInstance) {
+      showToast('Please connect your wallet to create a new note', 'warning', 4000);
+      return;
+    }
+
     // Open modal for new note creation
     setModalNote(null);
     setIsModalOpen(true);
@@ -135,11 +190,18 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
       console.log('Current note:', currentNote);
 
-      // Update via backend API if not a local note
+      // Send payment and update via backend API if not a local note
+      let txHash = null;
       if (!String(noteId).startsWith('local-')) {
-        console.log('Updating note in backend...');
-        await noteService.updateNote(noteId, content);
-        console.log('Backend update successful');
+        try {
+          txHash = await sendPaymentForOperation('UPDATE');
+          console.log('Updating note in backend...');
+          await noteService.updateNote(noteId, content, txHash);
+          console.log('Backend update successful');
+        } catch (error) {
+          // Error toast already shown in sendPaymentForOperation
+          throw error;
+        }
       } else {
         console.log('Skipping backend update for local note');
       }
@@ -166,6 +228,9 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
       
     } catch (error) {
       console.error('Failed to update note:', error);
+      if (!error.message?.includes('cancelled') && !error.message?.includes('Wallet not connected')) {
+        showToast(`Failed to update note: ${error.message}`, 'error', 4000);
+      }
       // Still update local state even if backend fails
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
@@ -188,11 +253,74 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     }
   };
 
+  const sendPaymentForOperation = async (operation) => {
+    if (!walletInstance || !walletState.connected) {
+      showToast('Wallet not connected. Please connect your wallet to perform this operation.', 'error', 4000);
+      throw new Error('Wallet not connected. Please connect your wallet to perform this operation.');
+    }
+
+    if (!walletState.address) {
+      showToast('Wallet address not available.', 'error', 4000);
+      throw new Error('Wallet address not available');
+    }
+
+    // Get service address (use wallet's own address as fallback for testing)
+    const serviceAddress = getServiceAddress(walletState.address);
+    if (!serviceAddress) {
+      showToast('Service address not configured. Please set VITE_SERVICE_ADDRESS environment variable.', 'error', 5000);
+      throw new Error('Service address not configured');
+    }
+
+    const requiredAmount = paymentService.getRequiredAmount(operation);
+    const balance = walletState.balanceAda;
+
+    if (!paymentService.hasSufficientBalance(balance, operation)) {
+      const errorMsg = `Insufficient balance. Required: ${requiredAmount} ADA, Available: ${balance?.toFixed(2) || 0} ADA`;
+      showToast(errorMsg, 'error', 5000);
+      throw new Error(errorMsg);
+    }
+
+    // Show confirmation toast
+    const confirmed = await showConfirmToast(
+      `This operation requires a payment of ${requiredAmount} ADA.\n\nYour balance: ${balance?.toFixed(2) || 0} ADA`,
+      null,
+      null
+    );
+
+    if (!confirmed) {
+      showToast('Payment cancelled', 'info', 3000);
+      throw new Error('Payment cancelled by user');
+    }
+
+    try {
+      showToast(`Processing payment of ${requiredAmount} ADA...`, 'info', 3000);
+      const txHash = await paymentService.sendPayment(walletInstance, operation, serviceAddress);
+      console.log(`${operation} payment successful:`, txHash);
+      showToast(`Payment successful! Transaction: ${txHash.slice(0, 8)}...`, 'success', 5000);
+      return txHash;
+    } catch (error) {
+      console.error(`Payment failed for ${operation}:`, error);
+      showToast(`Payment failed: ${error.message}`, 'error', 5000);
+      throw error;
+    }
+  };
+
   const deleteNote = async (noteId) => {
 		try {
+      // Send payment for delete operation
+      let txHash = null;
+      if (!String(noteId).startsWith('local-')) {
+        try {
+          txHash = await sendPaymentForOperation('DELETE');
+        } catch (error) {
+          // Error toast already shown in sendPaymentForOperation
+          return;
+        }
+      }
+
 			// Call backend for non-local notes
 			if (!String(noteId).startsWith('local-')) {
-				await noteService.deleteNote(noteId);
+				await noteService.deleteNote(noteId, txHash);
 			}
 
 			// Optimistically update local state (soft delete)
@@ -210,6 +338,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 			setNotes(updatedNotes);
 		} catch (error) {
 			console.error('Failed to delete note:', error);
+			showToast(`Failed to delete note: ${error.message}`, 'error', 4000);
 			// Still update local state even if backend fails
 			const updatedNotes = notes.map(note => {
 				if (note.id === noteId) {
@@ -357,20 +486,25 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
       const title = (content.split('\n')[0] || 'New Note').toString();
       
       if (!noteId || String(noteId).startsWith('local-')) {
-        // Creating new note
-        const created = await noteService.createNote(title, content);
+        // Creating new note - send payment first
+        const txHash = await sendPaymentForOperation('CREATE');
+        const created = await noteService.createNote(title, content, txHash);
         await loadNotes();
         if (created && created.id) {
           setSelectedNoteId(created.id);
         }
       } else {
-        // Updating existing note
-        await noteService.updateNote(noteId, content);
+        // Updating existing note - send payment first
+        const txHash = await sendPaymentForOperation('UPDATE');
+        await noteService.updateNote(noteId, content, txHash);
         await loadNotes();
         setSelectedNoteId(noteId);
       }
     } catch (err) {
       console.error('Save failed:', err);
+      if (!err.message?.includes('cancelled') && !err.message?.includes('Wallet not connected')) {
+        showToast(`Save failed: ${err.message}`, 'error', 4000);
+      }
     } finally {
       setLoading(false);
     }
@@ -446,6 +580,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         onDelete={deleteNote}
         onSetPriority={setPriority}
       />
+      <ToastContainer toasts={toasts} removeToast={removeToast} />
     </>
   );
 }
