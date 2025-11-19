@@ -1,0 +1,294 @@
+/* NoteEditor.css */
+.note-editor {
+  flex: 1;
+  background-color: #1c1c1e;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.no-note-selected {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background-color: #1c1c1e;
+}
+
+.welcome-message {
+  text-align: center;
+  color: #8e8e93;
+}
+
+.welcome-logo {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
+  margin-bottom: 16px;
+  opacity: 0.8;
+}
+
+.welcome-message h2 {
+  font-size: 24px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+}
+
+.welcome-message p {
+  font-size: 16px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.note-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid #3a3a3c;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #2c2c2e;
+}
+
+.note-info {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  font-size: 14px;
+  color: #8e8e93;
+}
+
+/* Priority Selector Styles */
+.priority-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.priority-label {
+  font-size: 14px;
+  color: #8e8e93;
+  font-weight: 500;
+}
+
+.priority-dropdown {
+  background-color: #3a3a3c;
+  border: 1px solid #48484a;
+  border-radius: 6px;
+  color: #ffffff;
+  padding: 6px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.priority-dropdown:hover {
+  border-color: #5a5a5c;
+}
+
+.priority-dropdown:focus {
+  border-color: #007aff;
+}
+
+.priority-dropdown:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Priority-specific styling */
+.priority-high {
+  border-color: #ff3b30 !important;
+  background-color: rgba(255, 59, 48, 0.1);
+}
+
+.priority-medium {
+  border-color: #ff9500 !important;
+  background-color: rgba(255, 149, 0, 0.1);
+}
+
+.priority-low {
+  border-color: #30d158 !important;
+  background-color: rgba(48, 209, 88, 0.1);
+}
+
+.note-date {
+  font-weight: 500;
+}
+
+.note-time {
+  color: #8e8e93;
+}
+
+.note-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.menu-container {
+  position: relative;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background-color: #2c2c2e;
+  border: 1px solid #3a3a3c;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  min-width: 160px;
+  z-index: 1000;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background-color: #3a3a3c;
+}
+
+.menu-icon {
+  font-size: 16px;
+  width: 20px;
+  display: flex;
+  justify-content: center;
+}
+
+/* Tags Section */
+.tags-section {
+  padding: 12px 24px;
+  border-bottom: 1px solid #3a3a3c;
+  background-color: #2c2c2e;
+}
+
+.tags-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  background-color: #007aff;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  gap: 4px;
+}
+
+.tag-text {
+  line-height: 1;
+}
+
+.tag-remove {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  margin-left: 2px;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s;
+}
+
+.tag-remove:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.tag-input {
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 14px;
+  padding: 4px 8px;
+  outline: none;
+  min-width: 150px;
+  flex: 1;
+}
+
+.tag-input::placeholder {
+  color: #8e8e93;
+  font-style: italic;
+}
+
+.note-content {
+  flex: 1;
+  padding: 24px;
+  background-color: #1c1c1e;
+}
+
+.note-textarea {
+  width: 100%;
+  height: 100%;
+  background: none;
+  border: none;
+  color: #ffffff;
+  font-size: 16px;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  padding: 0;
+}
+
+.note-textarea::placeholder {
+  color: #8e8e93;
+  font-style: italic;
+}
+
+.note-textarea:focus {
+  outline: none;
+}
+
+/* Scrollbar styling for webkit browsers */
+.note-textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.note-textarea::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.note-textarea::-webkit-scrollbar-thumb {
+  background-color: #3a3a3c;
+  border-radius: 4px;
+}
+
+.note-textarea::-webkit-scrollbar-thumb:hover {
+  background-color: #48484a;
+}
