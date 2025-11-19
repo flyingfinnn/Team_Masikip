@@ -57,9 +57,6 @@ function WalletPage({ walletState = {} }) {
             amount = 0;
         }
 
-        // Add some random incoming transactions for demo purposes if list is short
-        // (This logic is just for display if we don't have enough real data)
-
         if (type === 'debit') {
           totals.totalSpent += amount;
         } else {
@@ -71,6 +68,48 @@ function WalletPage({ walletState = {} }) {
       { totalSpent: 0, totalReceived: 0, netBalance: 1000 }
     );
   }, [transactions]);
+
+  const exportToCSV = () => {
+    if (transactions.length === 0) {
+      alert('No transactions to export');
+      return;
+    }
+
+    // Define CSV headers
+    const headers = ['Transaction ID', 'Block Hash', 'Previous Hash', 'Action Type', 'Note ID', 'Timestamp', 'Metadata', 'Wallet Address', 'Status'];
+
+    // Convert transactions to CSV rows
+    const rows = transactions.map(txn => [
+      txn.transactionId || '',
+      txn.blockHash || '',
+      txn.previousHash || '',
+      txn.actionType || '',
+      txn.noteId || '',
+      new Date(txn.timestamp).toLocaleString() || '',
+      txn.metadata || '',
+      txn.walletAddress || 'N/A',
+      'Confirmed'
+    ]);
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+
+    link.setAttribute('href', url);
+    link.setAttribute('download', `masikip-transactions-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="wallet-page">
@@ -110,7 +149,7 @@ function WalletPage({ walletState = {} }) {
             <h2>Blockchain Ledger</h2>
             <p>Live feed from the Masikip Private Chain</p>
           </div>
-          <button type="button">Export CSV</button>
+          <button type="button" onClick={exportToCSV}>Export CSV</button>
         </header>
 
         <div className="transactions-table">
