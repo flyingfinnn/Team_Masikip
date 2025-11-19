@@ -2,55 +2,24 @@
 
 .notes-gallery {
   min-height: 100vh;
+  max-height: 100vh;
   width: 100%;
-  padding: 32px 40px 48px;
+  padding: 24px 40px 48px;
   background: radial-gradient(circle at top, rgba(0, 122, 255, 0.15), transparent 55%),
     #1c1c1e;
   color: #ffffff;
   font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
-.gallery-header {
+.gallery-actions {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 32px;
-}
-
-.branding {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.gallery-logo {
-  width: 64px;
-  height: 64px;
-  object-fit: contain;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.08);
-  padding: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-}
-
-.branding h1 {
-  margin: 0;
-  font-size: 32px;
-  letter-spacing: -0.02em;
-}
-
-.branding p {
-  margin: 4px 0 0;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.header-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px 0;
 }
 
 .ghost-btn {
@@ -58,8 +27,8 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: #ffffff;
   border-radius: 999px;
-  padding: 10px 16px;
-  font-size: 14px;
+  padding: 8px 14px;
+  font-size: 13px;
   cursor: pointer;
   transition: background 0.2s, transform 0.2s;
 }
@@ -73,7 +42,7 @@
   background: linear-gradient(135deg, #0a84ff, #5ac8fa);
   border: none;
   color: #ffffff;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-radius: 999px;
   font-weight: 600;
   cursor: pointer;
@@ -100,22 +69,11 @@
 }
 
 .toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  display: none;
 }
 
 .search-field {
-  flex: 1;
-  min-width: 220px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 10px 16px;
+  display: none;
 }
 
 .search-field input {
@@ -128,19 +86,53 @@
 }
 
 .status-pill {
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  font-weight: 500;
+  display: none;
+}
+
+.notes-section {
+  margin-bottom: 32px;
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.section-title.collapsible {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+
+.section-title.collapsible:hover {
+  color: #5ac8fa;
+}
+
+.section-arrow {
+  font-size: 12px;
+  display: inline-block;
+  transition: transform 0.2s;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.section-arrow.open {
+  transform: rotate(180deg);
 }
 
 .notes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
 .note-card {
+  min-width: 280px;
+  max-width: 100%;
   background: rgba(44, 44, 46, 0.9);
   border-radius: 18px;
   padding: 20px;
@@ -216,8 +208,11 @@
 }
 
 .pin-btn.pinned {
-  background: rgba(255, 214, 10, 0.15);
-  border-color: rgba(255, 214, 10, 0.4);
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #fbbf24;
+  filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.5));
+  opacity: 1;
 }
 
 .note-card-title {

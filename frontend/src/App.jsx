@@ -375,6 +375,7 @@ const initialWalletState = {
 function App() {
   const [activeView, setActiveView] = useState('notes')
   const [walletState, setWalletState] = useState(initialWalletState)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const handleWalletButtonClick = async () => {
     if (walletState.connected) {
@@ -458,8 +459,23 @@ function App() {
     <div className="app-shell">
       <nav className="app-nav">
         <div className="nav-brand">
-          <span className="brand-dot" />
-          Masikip Note
+          <div className="brand-info">
+            <div className="brand-title">
+              <span className="brand-dot" />
+              Ledgee
+            </div>
+            <div className="brand-tagline">All blockchain-backed notes at a glance.</div>
+          </div>
+          <div className="nav-search">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Search notes..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
         </div>
 
         <div className="nav-actions">
@@ -504,9 +520,13 @@ function App() {
           />
         ) : (
           <NotesPage 
+            
             walletState={walletState} 
+            
             onWalletButtonClick={handleWalletButtonClick}
             walletInstance={walletState.walletInstance}
+         
+            searchTerm={searchTerm}
           />
         )}
       </main>

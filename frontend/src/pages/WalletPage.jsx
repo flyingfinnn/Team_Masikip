@@ -6,7 +6,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory }) {
   const [loadingTxs, setLoadingTxs] = useState(false);
   
   const isConnected = walletState?.connected === true;
-  const walletName = walletState?.walletName || 'Masikip Vault';
+  const walletName = walletState?.walletName || 'Ledgee Vault';
   const displayAddress = walletState?.address || 'No wallet connected';
   const liveBalance = typeof walletState?.balanceAda === 'number' ? walletState.balanceAda : null;
   const spentAda = typeof walletState?.spentAda === 'number' ? walletState.spentAda : null;
