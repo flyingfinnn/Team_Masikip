@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import NoteEditor from '../components/NoteEditor';
 import NotesGallery from '../components/NotesGallery';
+import NoteModal from '../components/NoteModal';
 import noteService from '../services/noteService';
 import '../styles/NotesPage.css';
 
@@ -57,6 +58,8 @@ function NotesPage() {
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // gallery | workspace
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalNote, setModalNote] = useState(null);
   const initialWalletState = {
     connected: false,
     connecting: false,
@@ -96,48 +99,9 @@ function NotesPage() {
   };
 
   const createNewNote = async () => {
-    try {
-      setLoading(true);
-      console.log('Creating new note...');
-      
-      // Create note via backend API
-      const backendNote = await noteService.createNote('New Note', '');
-      console.log('Backend note created:', backendNote);
-      const newNote = noteService.transformNote(backendNote);
-      console.log('Transformed note:', newNote);
-      
-      // Update local state
-      const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
-      updatedNotes.unshift({ ...newNote, isSelected: true });
-      setNotes(updatedNotes);
-      setSelectedNoteId(newNote.id);
-      
-    } catch (error) {
-      console.error('Failed to create note:', error);
-      
-      // Fallback to local-only note creation if backend is unavailable
-      const fallbackNote = {
-        id: `local-${Date.now()}`,
-        title: 'New Note',
-        preview: '',
-        content: '',
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now(),
-        isSelected: true,
-        isPinned: false,
-        priority: 'Medium',
-        isDeleted: false,
-        tags: []
-      };
-      
-      const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
-      updatedNotes.unshift(fallbackNote);
-      setNotes(updatedNotes);
-      setSelectedNoteId(fallbackNote.id);
-    } finally {
-      setLoading(false);
-    }
+    // Open modal for new note creation
+    setModalNote(null);
+    setIsModalOpen(true);
   };
 
   const selectNote = (noteId) => {
@@ -280,13 +244,12 @@ function NotesPage() {
         await noteService.updateNotePriority(noteId, newIsPinned);
       }
 
-      // Update local state
+      // Update local state - only toggle isPinned, keep priority unchanged
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
           return {
             ...note,
             isPinned: newIsPinned,
-            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -303,7 +266,6 @@ function NotesPage() {
           return {
             ...note,
             isPinned: newIsPinned,
-            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -446,13 +408,15 @@ function NotesPage() {
   };
 
   const handleCreateNoteClick = () => {
-    setViewMode('workspace');
-    return createNewNote();
+    createNewNote();
   };
 
   const handleOpenExistingNote = (noteId) => {
-    setViewMode('workspace');
-    selectNote(noteId);
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      setModalNote(note);
+      setIsModalOpen(true);
+    }
   };
 
   const handleBackToGallery = () => {
@@ -466,62 +430,103 @@ function NotesPage() {
     );
   };
 
+  const handleModalSave = async (noteId, content) => {
+    try {
+      setLoading(true);
+      const title = (content.split('\n')[0] || 'New Note').toString();
+      
+      if (!noteId || String(noteId).startsWith('local-')) {
+        // Creating new note
+        const created = await noteService.createNote(title, content);
+        await loadNotes();
+        if (created && created.id) {
+          setSelectedNoteId(created.id);
+        }
+      } else {
+        // Updating existing note
+        await noteService.updateNote(noteId, content);
+        await loadNotes();
+        setSelectedNoteId(noteId);
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setModalNote(null);
+  };
+
   const selectedNote = notes.find(note => note.id === selectedNoteId);
 
-  if (viewMode === 'gallery') {
-    return (
-      <NotesGallery
-        notes={notes}
-        loading={loading}
-        onSelectNote={handleOpenExistingNote}
-        onCreateNote={handleCreateNoteClick}
-        walletState={walletState}
-        onWalletButtonClick={handleWalletButtonClick}
-      />
-    );
-  }
-
   return (
-    <div className="notes-app">
-      <Sidebar 
-        notes={notes}
-        loading={loading}
-        onCreateNote={handleCreateNoteClick}
-        onSelectNote={selectNote}
-        onBackToGallery={handleBackToGallery}
-        walletState={walletState}
-        onWalletButtonClick={handleWalletButtonClick}
-      />
-      <NoteEditor 
-        note={selectedNote}
-        onUpdateNote={updateNote}
-        onTogglePin={togglePin}
-        onSetPriority={setPriority}
-        onDeleteNote={deleteNote}
-        onRestoreNote={restoreNote}
-        onSave={async (noteId, content) => {
-          try {
-            setLoading(true);
-            const title = (content.split('\n')[0] || 'New Note').toString();
-            if (!noteId || String(noteId).startsWith('local-')) {
-              const created = await noteService.createNote(title, content);
-              await loadNotes();
-              if (created && created.id) {
-                setSelectedNoteId(created.id);
+    <>
+      {viewMode === 'gallery' ? (
+        <NotesGallery
+          notes={notes}
+          loading={loading}
+          onSelectNote={handleOpenExistingNote}
+          onCreateNote={handleCreateNoteClick}
+          onDeleteNote={deleteNote}
+          onTogglePin={togglePin}
+          walletState={walletState}
+          onWalletButtonClick={handleWalletButtonClick}
+        />
+      ) : (
+        <div className="notes-app">
+          <Sidebar 
+            notes={notes}
+            loading={loading}
+            onCreateNote={handleCreateNoteClick}
+            onSelectNote={selectNote}
+            onBackToGallery={handleBackToGallery}
+            walletState={walletState}
+            onWalletButtonClick={handleWalletButtonClick}
+          />
+          <NoteEditor 
+            note={selectedNote}
+            onUpdateNote={updateNote}
+            onTogglePin={togglePin}
+            onSetPriority={setPriority}
+            onDeleteNote={deleteNote}
+            onRestoreNote={restoreNote}
+            onSave={async (noteId, content) => {
+              try {
+                setLoading(true);
+                const title = (content.split('\n')[0] || 'New Note').toString();
+                if (!noteId || String(noteId).startsWith('local-')) {
+                  const created = await noteService.createNote(title, content);
+                  await loadNotes();
+                  if (created && created.id) {
+                    setSelectedNoteId(created.id);
+                  }
+                } else {
+                  await noteService.updateNote(noteId, content);
+                  await loadNotes();
+                  setSelectedNoteId(noteId);
+                }
+              } catch (err) {
+                console.error('Save failed:', err);
+              } finally {
+                setLoading(false);
               }
-            } else {
-              await noteService.updateNote(noteId, content);
-              await loadNotes();
-              setSelectedNoteId(noteId);
-            }
-          } catch (err) {
-            console.error('Save failed:', err);
-          } finally {
-            setLoading(false);
-          }
-        }}
+            }}
+          />
+        </div>
+      )}
+      
+      <NoteModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        note={modalNote}
+        onSave={handleModalSave}
+        onDelete={deleteNote}
+        onSetPriority={setPriority}
       />
-    </div>
+    </>
   );
 }
 
