@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { BrowserWallet } from '@meshsdk/core'
 import { Address } from '@emurgo/cardano-serialization-lib-asmjs'
 import NotesPage from './pages/NotesPage'
@@ -373,12 +373,79 @@ const initialWalletState = {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState('notes')
+  const [activeView, setActiveView] = useState(() => {
+    // Restore active view from localStorage
+    return localStorage.getItem('ledgee_activeView') || 'notes'
+  })
   const [walletState, setWalletState] = useState(initialWalletState)
   const [searchTerm, setSearchTerm] = useState('')
 
+  // Save active view to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('ledgee_activeView', activeView)
+  }, [activeView])
+
+  // Restore wallet connection on mount
+  useEffect(() => {
+    const restoreWalletConnection = async () => {
+      const savedWalletName = localStorage.getItem('ledgee_walletName')
+      const savedAddress = localStorage.getItem('ledgee_walletAddress')
+      
+      if (!savedWalletName || !savedAddress) return
+
+      try {
+        setWalletState((prev) => ({
+          ...prev,
+          connecting: true,
+        }))
+
+        const wallet = await BrowserWallet.enable(savedWalletName)
+        const addresses = await wallet.getUsedAddresses()
+        const changeAddresses = await wallet.getChangeAddress()
+        const resolvedAddress = toBech32Address(addresses[0] || changeAddresses || '')
+
+        // Verify the address matches what we saved
+        if (resolvedAddress !== savedAddress) {
+          // Address changed, clear saved data
+          localStorage.removeItem('ledgee_walletName')
+          localStorage.removeItem('ledgee_walletAddress')
+          setWalletState(initialWalletState)
+          return
+        }
+
+        const [balanceAda, koiosMetrics] = await Promise.all([
+          getWalletBalanceAda(wallet),
+          resolvedAddress ? fetchKoiosMetrics(resolvedAddress) : Promise.resolve({}),
+        ])
+
+        setWalletState({
+          connected: true,
+          connecting: false,
+          address: resolvedAddress,
+          walletName: savedWalletName,
+          balanceAda,
+          spentAda: koiosMetrics?.spentAda ?? null,
+          pendingFeesAda: koiosMetrics?.pendingFeesAda ?? null,
+          walletInstance: wallet,
+          error: null,
+        })
+      } catch (error) {
+        console.error('Failed to restore wallet connection:', error)
+        // Clear saved data if restore fails
+        localStorage.removeItem('ledgee_walletName')
+        localStorage.removeItem('ledgee_walletAddress')
+        setWalletState(initialWalletState)
+      }
+    }
+
+    restoreWalletConnection()
+  }, [])
+
   const handleWalletButtonClick = async () => {
     if (walletState.connected) {
+      // Clear saved wallet data
+      localStorage.removeItem('ledgee_walletName')
+      localStorage.removeItem('ledgee_walletAddress')
       setWalletState(initialWalletState)
       return
     }
@@ -417,6 +484,10 @@ function App() {
         getWalletBalanceAda(wallet),
         resolvedAddress ? fetchKoiosMetrics(resolvedAddress) : Promise.resolve({}),
       ])
+
+      // Save wallet info to localStorage for session persistence
+      localStorage.setItem('ledgee_walletName', walletName)
+      localStorage.setItem('ledgee_walletAddress', resolvedAddress)
 
       setWalletState({
         connected: true,
