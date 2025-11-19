@@ -113,8 +113,8 @@ function NoteEditor({ note, onUpdateNote, onTogglePin, onSetPriority, onDeleteNo
       <div className="note-editor">
         <div className="no-note-selected">
           <div className="welcome-message">
-            <img src={NotesLogo} alt="Masikip Notes" className="welcome-logo" />
-            <h2>Welcome to Masikip Notes</h2>
+            <img src={NotesLogo} alt="Ledgee" className="welcome-logo" />
+            <h2>Welcome to Ledgee</h2>
             <p>Select a note to view it here, or create a new note.</p>
           </div>
         </div>

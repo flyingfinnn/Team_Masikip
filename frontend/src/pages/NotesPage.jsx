@@ -61,13 +61,22 @@ const fallbackWalletState = {
   error: null,
 };
 
-function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {} }) {
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, searchTerm = '' }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // gallery | workspace
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalNote, setModalNote] = useState(null);
+
+  // Filter notes based on search term
+  const filteredNotes = notes.filter((note) => {
+    if (!searchTerm) return true;
+    const searchLower = searchTerm.toLowerCase();
+    const titleMatch = (note.title || '').toLowerCase().includes(searchLower);
+    const contentMatch = (note.content || '').toLowerCase().includes(searchLower);
+    return titleMatch || contentMatch;
+  });
 
   // Load notes from backend on component mount
   useEffect(() => {
@@ -378,7 +387,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     <>
       {viewMode === 'gallery' ? (
         <NotesGallery
-          notes={notes}
+          notes={filteredNotes}
           loading={loading}
           onSelectNote={handleOpenExistingNote}
           onCreateNote={handleCreateNoteClick}
@@ -389,7 +398,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
       ) : (
         <div className="notes-app">
           <Sidebar 
-            notes={notes}
+            notes={filteredNotes}
             loading={loading}
             onCreateNote={handleCreateNoteClick}
             onSelectNote={selectNote}

@@ -45,7 +45,7 @@ const mockTransactions = [
 ];
 
 function WalletPage({ walletState = {} }) {
-  const walletName = walletState?.walletName || 'Masikip Vault';
+  const walletName = walletState?.walletName || 'Ledgee Vault';
   const displayAddress = walletState?.address || 'No wallet connected';
   const { totalSpent, totalReceived, netBalance } = useMemo(() => {
     return mockTransactions.reduce(

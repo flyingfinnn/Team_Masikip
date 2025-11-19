@@ -53,19 +53,34 @@ function Sidebar({
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <div className="sidebar-title">
-          {onBackToGallery && (
-            <button
-              className="action-btn back-btn"
-              type="button"
-              onClick={onBackToGallery}
-              title="Back to overview"
-            >
-              ←
-            </button>
-          )}
-          <img src={NotesLogo} alt="Masikip Notes" className="app-logo" />
-          <span>Masikip Notes</span>
+        <div className="sidebar-branding">
+          <div className="sidebar-title">
+            {onBackToGallery && (
+              <button
+                className="action-btn back-btn"
+                type="button"
+                onClick={onBackToGallery}
+                title="Back to overview"
+              >
+                ←
+              </button>
+            )}
+            <img src={NotesLogo} alt="Ledgee" className="app-logo" />
+            <div className="title-group">
+              <span className="app-name">Ledgee</span>
+              <span className="app-tagline">All blockchain-backed notes at a glance.</span>
+            </div>
+          </div>
+          <div className="header-search">
+            <span className="search-icon">🔍</span>
+            <input
+              type="text"
+              placeholder="Search all notes"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="search-input"
+            />
+          </div>
         </div>
         <div className="sidebar-actions">
           <button className="action-btn" title="Sort">
@@ -90,19 +105,6 @@ function Sidebar({
           <button className="action-btn new-note-btn" onClick={onCreateNote} title="New Note">
             <span>📝</span>
           </button>
-        </div>
-      </div>
-
-      <div className="search-container">
-        <div className="search-box">
-          <span className="search-icon">🔍</span>
-          <input
-            type="text"
-            placeholder="Search all notes"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input"
-          />
         </div>
       </div>
 
