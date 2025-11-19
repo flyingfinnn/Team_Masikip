@@ -5,6 +5,17 @@
     <link rel="icon" type="image/png" href="/Notes.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Masikip Notes</title>
+    <script type="module">
+      // Polyfills for Mesh SDK
+      import { Buffer } from 'buffer';
+      window.global = window;
+      window.Buffer = Buffer;
+      window.process = {
+        env: { NODE_ENV: 'production' },
+        version: '',
+        nextTick: function(fn) { setTimeout(fn, 0); }
+      };
+    </script>
   </head>
   <body>
     <div id="root"></div>

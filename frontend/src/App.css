@@ -58,7 +58,15 @@ body {
 
 .nav-actions {
   display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-switch {
+  display: flex;
   gap: 12px;
+  padding-left: 16px;
+  border-left: 1px solid var(--nav-border);
 }
 
 .nav-btn {
@@ -81,6 +89,35 @@ body {
   background: rgba(53, 198, 149, 0.15);
   border-color: rgba(53, 198, 149, 0.35);
   color: var(--nav-text);
+}
+
+.nav-btn.wallet-connect {
+  border-color: rgba(53, 198, 149, 0.45);
+  background: rgba(53, 198, 149, 0.18);
+  color: var(--nav-text);
+  font-family: 'Roboto Mono', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-all;
+  padding: 10px 18px;
+  box-shadow: 0 8px 18px rgba(53, 198, 149, 0.25);
+}
+
+.nav-btn.wallet-connect:hover:not(:disabled) {
+  background: rgba(53, 198, 149, 0.3);
+  border-color: rgba(53, 198, 149, 0.65);
+}
+
+.nav-btn.wallet-connect.connected {
+  background: rgba(53, 198, 149, 0.28);
+  border-color: rgba(53, 198, 149, 0.85);
+  box-shadow: 0 10px 24px rgba(53, 198, 149, 0.35);
+}
+
+.nav-btn.wallet-connect:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .app-content {

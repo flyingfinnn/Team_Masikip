@@ -4,7 +4,9 @@ import '../styles/WalletPage.css';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
-function WalletPage() {
+function WalletPage({ walletState = {} }) {
+  const walletName = walletState?.walletName || 'Masikip Vault';
+  const displayAddress = walletState?.address || 'No wallet connected';
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -57,7 +59,7 @@ function WalletPage() {
 
         // Add some random incoming transactions for demo purposes if list is short
         // (This logic is just for display if we don't have enough real data)
-        
+
         if (type === 'debit') {
           totals.totalSpent += amount;
         } else {
@@ -75,8 +77,8 @@ function WalletPage() {
       <div className="wallet-page__header">
         <div>
           <p className="wallet-label">Active Wallet</p>
-          <h1>Masikip Vault</h1>
-          <p className="wallet-address">addr1qxy...8f4d</p>
+          <h1>{walletName}</h1>
+          <p className="wallet-address">{displayAddress}</p>
         </div>
         <div className="wallet-net">
           <span>Net Balance</span>
@@ -159,4 +161,3 @@ function WalletPage() {
 }
 
 export default WalletPage;
-

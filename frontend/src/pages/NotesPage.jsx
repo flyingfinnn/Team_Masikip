@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import NoteEditor from '../components/NoteEditor';
 import NotesGallery from '../components/NotesGallery';
+import NoteModal from '../components/NoteModal';
 import noteService from '../services/noteService';
 import '../styles/NotesPage.css';
 
@@ -52,19 +53,21 @@ import '../styles/NotesPage.css';
  * - transactionData: Note operation data
  * - signature: Digital signature for authenticity
  */
-function NotesPage() {
+const fallbackWalletState = {
+  connected: false,
+  connecting: false,
+  address: null,
+  walletName: null,
+  error: null,
+};
+
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {} }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [viewMode, setViewMode] = useState('gallery'); // gallery | workspace
-  const initialWalletState = {
-    connected: false,
-    connecting: false,
-    address: null,
-    walletName: null,
-    error: null
-  };
-  const [walletState, setWalletState] = useState(initialWalletState);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalNote, setModalNote] = useState(null);
 
   // Load notes from backend on component mount
   useEffect(() => {
@@ -96,6 +99,7 @@ function NotesPage() {
   };
 
   const createNewNote = async () => {
+<<<<<<< HEAD
     try {
       setLoading(true);
       console.log('Creating new note...');
@@ -138,6 +142,11 @@ function NotesPage() {
     } finally {
       setLoading(false);
     }
+=======
+    // Open modal for new note creation
+    setModalNote(null);
+    setIsModalOpen(true);
+>>>>>>> 8425a9656d6cc3624477cf85fb3a4c9cbadd3ff9
   };
 
   const selectNote = (noteId) => {
@@ -280,13 +289,12 @@ function NotesPage() {
         await noteService.updateNotePriority(noteId, newIsPinned, walletState.address);
       }
 
-      // Update local state
+      // Update local state - only toggle isPinned, keep priority unchanged
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
           return {
             ...note,
             isPinned: newIsPinned,
-            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -303,7 +311,6 @@ function NotesPage() {
           return {
             ...note,
             isPinned: newIsPinned,
-            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -357,102 +364,16 @@ function NotesPage() {
     }
   };
 
-  const detectWalletProvider = () => {
-    if (typeof window === 'undefined' || !window.cardano) return null;
-    const preferredOrder = ['eternl', 'nami', 'flint', 'lace', 'gerowallet', 'typhoncip30'];
-    for (const key of preferredOrder) {
-      if (window.cardano[key]) {
-        const provider = window.cardano[key];
-        return {
-          key,
-          provider,
-          label: provider?.name || key.charAt(0).toUpperCase() + key.slice(1)
-        };
-      }
-    }
-
-    const dynamicKeys = Object.keys(window.cardano).filter(
-      (key) => typeof window.cardano[key] === 'object'
-    );
-
-    if (dynamicKeys.length > 0) {
-      const key = dynamicKeys[0];
-      const provider = window.cardano[key];
-      return {
-        key,
-        provider,
-        label: provider?.name || key
-      };
-    }
-
-    return null;
-  };
-
-  const handleWalletButtonClick = async () => {
-    if (walletState.connected) {
-      setWalletState(initialWalletState);
-      return;
-    }
-
-    if (typeof window === 'undefined') {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'Wallet connections are only available in the browser.'
-      }));
-      return;
-    }
-
-    const walletHandle = detectWalletProvider();
-    if (!walletHandle || !walletHandle.provider?.enable) {
-      setWalletState((prev) => ({
-        ...prev,
-        error: 'No CIP-30 compatible Cardano wallet detected.'
-      }));
-      return;
-    }
-
-    try {
-      setWalletState((prev) => ({
-        ...prev,
-        connecting: true,
-        error: null
-      }));
-
-      const api = await walletHandle.provider.enable();
-      const rewardAddresses = (await api.getRewardAddresses?.()) || [];
-      const usedAddresses = rewardAddresses.length
-        ? rewardAddresses
-        : (await api.getUsedAddresses?.()) || [];
-      const changeAddress = await api.getChangeAddress?.();
-      const resolvedAddress = rewardAddresses[0] || usedAddresses[0] || changeAddress || '';
-
-      setWalletState({
-        connected: true,
-        connecting: false,
-        address: resolvedAddress,
-        walletName: walletHandle.label,
-        error: null
-      });
-    } catch (error) {
-      console.error('Wallet connection failed:', error);
-      setWalletState({
-        connected: false,
-        connecting: false,
-        address: null,
-        walletName: null,
-        error: error?.message || 'Wallet connection failed. Please try again.'
-      });
-    }
-  };
-
   const handleCreateNoteClick = () => {
-    setViewMode('workspace');
-    return createNewNote();
+    createNewNote();
   };
 
   const handleOpenExistingNote = (noteId) => {
-    setViewMode('workspace');
-    selectNote(noteId);
+    const note = notes.find(n => n.id === noteId);
+    if (note) {
+      setModalNote(note);
+      setIsModalOpen(true);
+    }
   };
 
   const handleBackToGallery = () => {
@@ -466,22 +387,40 @@ function NotesPage() {
     );
   };
 
+  const handleModalSave = async (noteId, content) => {
+    try {
+      setLoading(true);
+      const title = (content.split('\n')[0] || 'New Note').toString();
+      
+      if (!noteId || String(noteId).startsWith('local-')) {
+        // Creating new note
+        const created = await noteService.createNote(title, content);
+        await loadNotes();
+        if (created && created.id) {
+          setSelectedNoteId(created.id);
+        }
+      } else {
+        // Updating existing note
+        await noteService.updateNote(noteId, content);
+        await loadNotes();
+        setSelectedNoteId(noteId);
+      }
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setModalNote(null);
+  };
+
   const selectedNote = notes.find(note => note.id === selectedNoteId);
 
-  if (viewMode === 'gallery') {
-    return (
-      <NotesGallery
-        notes={notes}
-        loading={loading}
-        onSelectNote={handleOpenExistingNote}
-        onCreateNote={handleCreateNoteClick}
-        walletState={walletState}
-        onWalletButtonClick={handleWalletButtonClick}
-      />
-    );
-  }
-
   return (
+<<<<<<< HEAD
     <div className="notes-app">
       <Sidebar
         notes={notes}
@@ -520,8 +459,71 @@ function NotesPage() {
             setLoading(false);
           }
         }}
+=======
+    <>
+      {viewMode === 'gallery' ? (
+        <NotesGallery
+          notes={notes}
+          loading={loading}
+          onSelectNote={handleOpenExistingNote}
+          onCreateNote={handleCreateNoteClick}
+          onDeleteNote={deleteNote}
+          onTogglePin={togglePin}
+          walletState={walletState}
+          />
+      ) : (
+        <div className="notes-app">
+          <Sidebar 
+            notes={notes}
+            loading={loading}
+            onCreateNote={handleCreateNoteClick}
+            onSelectNote={selectNote}
+            onBackToGallery={handleBackToGallery}
+            walletState={walletState}
+            onWalletButtonClick={onWalletButtonClick}
+          />
+          <NoteEditor 
+            note={selectedNote}
+            onUpdateNote={updateNote}
+            onTogglePin={togglePin}
+            onSetPriority={setPriority}
+            onDeleteNote={deleteNote}
+            onRestoreNote={restoreNote}
+            onSave={async (noteId, content) => {
+              try {
+                setLoading(true);
+                const title = (content.split('\n')[0] || 'New Note').toString();
+                if (!noteId || String(noteId).startsWith('local-')) {
+                  const created = await noteService.createNote(title, content);
+                  await loadNotes();
+                  if (created && created.id) {
+                    setSelectedNoteId(created.id);
+                  }
+                } else {
+                  await noteService.updateNote(noteId, content);
+                  await loadNotes();
+                  setSelectedNoteId(noteId);
+                }
+              } catch (err) {
+                console.error('Save failed:', err);
+              } finally {
+                setLoading(false);
+              }
+            }}
+          />
+        </div>
+      )}
+      
+      <NoteModal
+        isOpen={isModalOpen}
+        onClose={handleModalClose}
+        note={modalNote}
+        onSave={handleModalSave}
+        onDelete={deleteNote}
+        onSetPriority={setPriority}
+>>>>>>> 8425a9656d6cc3624477cf85fb3a4c9cbadd3ff9
       />
-    </div>
+    </>
   );
 }
 

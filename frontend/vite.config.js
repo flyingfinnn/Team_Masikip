@@ -6,5 +6,27 @@ export default defineConfig({
   plugins: [react()],
   css: {
     devSourcemap: true
-  }
+  },
+  define: {
+    'global': 'globalThis',
+    'process.env': {},
+  },
+  resolve: {
+    alias: {
+      'node-fetch': 'isomorphic-fetch',
+      buffer: 'buffer',
+      events: 'events',
+      util: 'util',
+      stream: 'stream-browserify',
+    },
+  },
+  optimizeDeps: {
+    esbuildOptions: {
+      target: 'esnext',
+      define: {
+        global: 'globalThis'
+      }
+    },
+    include: ['buffer', 'events', 'util', 'stream'],
+  },
 })

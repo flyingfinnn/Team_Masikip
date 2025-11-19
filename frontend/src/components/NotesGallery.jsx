@@ -7,6 +7,8 @@ function NotesGallery({
   loading,
   onSelectNote,
   onCreateNote,
+  onDeleteNote,
+  onTogglePin,
   walletState,
   onWalletButtonClick
 }) {
@@ -31,12 +33,23 @@ function NotesGallery({
       : searchedNotes;
 
     const sortedNotes = [...pinnedFiltered].sort((a, b) => {
+      // First priority: Pinned notes always at the top
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      
+      // Second priority: Sort by priority level (High > Medium > Low)
+      const priorityRank = { High: 3, Medium: 2, Low: 1 };
+      const priorityDiff = (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0);
+      if (priorityDiff !== 0) {
+        return priorityDiff;
+      }
+      
+      // Third priority: Sort by the selected sort key
       if (sortKey === 'created') {
         return (b.timestamp || 0) - (a.timestamp || 0);
       }
       if (sortKey === 'priority') {
-        const priorityRank = { High: 2, Medium: 1, Low: 0 };
-        return (priorityRank[b.priority] || 0) - (priorityRank[a.priority] || 0);
+        return 0; // Already sorted by priority above
       }
       return (b.lastModified || 0) - (a.lastModified || 0);
     });
@@ -44,21 +57,33 @@ function NotesGallery({
     return sortedNotes;
   }, [notes, searchTerm, showPinnedOnly, sortKey]);
 
-  const formatWalletLabel = () => {
-    if (walletState?.connecting) return 'Connecting...';
-    if (walletState?.connected) {
-      const walletName = walletState.walletName || 'Wallet';
-      const addr = walletState.address || '';
-      const shortAddress =
-        addr.length > 10 ? `${addr.slice(0, 8)}...${addr.slice(-4)}` : addr;
-      return `${walletName} · ${shortAddress}`;
-    }
-    return 'Connect Wallet';
-  };
-
   const handleNoteClick = (noteId) => {
     if (typeof onSelectNote === 'function') {
       onSelectNote(noteId);
+    }
+  };
+
+  const handleEditClick = (e, noteId) => {
+    e.stopPropagation();
+    if (typeof onSelectNote === 'function') {
+      onSelectNote(noteId);
+    }
+  };
+
+  const handleDeleteClick = async (e, noteId) => {
+    e.stopPropagation();
+    if (typeof onDeleteNote === 'function') {
+      const confirmed = window.confirm('Are you sure you want to delete this note?');
+      if (confirmed) {
+        await onDeleteNote(noteId);
+      }
+    }
+  };
+
+  const handlePinClick = async (e, noteId) => {
+    e.stopPropagation();
+    if (typeof onTogglePin === 'function') {
+      await onTogglePin(noteId);
     }
   };
 
@@ -83,19 +108,6 @@ function NotesGallery({
             }
           >
             ⇅ Sort: {sortKey === 'updated' ? 'Last Edited' : sortKey === 'created' ? 'Creation' : 'Priority'}
-          </button>
-          <button
-            className={`ghost-btn wallet-btn ${walletState?.connected ? 'connected' : ''}`}
-            type="button"
-            onClick={onWalletButtonClick}
-            disabled={walletState?.connecting}
-            title={
-              walletState?.connected
-                ? walletState.address
-                : walletState?.error || 'Connect your Cardano wallet'
-            }
-          >
-            {formatWalletLabel()}
           </button>
           <button
             className="ghost-btn"
@@ -152,13 +164,38 @@ function NotesGallery({
             >
               <div className="note-card-header">
                 <span className="note-card-title">{note.title || 'Untitled'}</span>
-                {note.isPinned && <span className="note-pill">📌 Pinned</span>}
+                <div className="note-card-actions">
+                  {note.isPinned && <span className="note-pill">📌 Pinned</span>}
+                  <button
+                    className={`note-action-btn pin-btn ${note.isPinned ? 'pinned' : ''}`}
+                    onClick={(e) => handlePinClick(e, note.id)}
+                    title={note.isPinned ? 'Unpin note' : 'Pin note'}
+                  >
+                    📌
+                  </button>
+                  <button
+                    className="note-action-btn edit-btn"
+                    onClick={(e) => handleEditClick(e, note.id)}
+                    title="Edit note"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    className="note-action-btn delete-btn"
+                    onClick={(e) => handleDeleteClick(e, note.id)}
+                    title="Delete note"
+                  >
+                    🗑️
+                  </button>
+                </div>
               </div>
               <p className="note-card-preview">
                 {note.preview || 'No additional content yet.'}
               </p>
               <div className="note-card-footer">
-                <span>{note.priority || 'Medium'} priority</span>
+                <span className={`priority-${(note.priority || 'Medium').toLowerCase()}`}>
+                  {note.priority || 'Medium'} priority
+                </span>
                 <span>{note.time || ''}</span>
               </div>
             </article>
