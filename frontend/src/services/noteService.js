@@ -12,10 +12,11 @@ const api = axios.create({
 
 class NoteService {
   // Create a new note
-  async createNote(title, content = '') {
+  async createNote(title, content = '', transactionHash = null) {
     const requestData = {
       title: title,
-      content: content
+      content: content,
+      ...(transactionHash && { transactionHash })
     };
 
     console.log('Creating note with data:', requestData);
@@ -25,7 +26,7 @@ class NoteService {
       title: title,
       content: content,
       timestamp: Date.now(),
-      blockHash: `hash-${Date.now()}`
+      transactionHash: transactionHash || `hash-${Date.now()}`
     });
 
     const { data } = await api.post('/notes', requestData);
@@ -40,7 +41,7 @@ class NoteService {
   }
 
   // Update note content
-  async updateNote(noteId, content) {
+  async updateNote(noteId, content, transactionHash = null) {
     console.log('noteService.updateNote called with:', { noteId, content });
 
     if (!noteId || noteId === 'undefined') {
@@ -48,7 +49,8 @@ class NoteService {
     }
 
     const requestData = {
-      content: content
+      content: content,
+      ...(transactionHash && { transactionHash })
     };
 
     console.log('UPDATE_NOTE Transaction:', {
@@ -56,7 +58,7 @@ class NoteService {
       noteId: noteId,
       content: content,
       timestamp: Date.now(),
-      blockHash: `hash-${Date.now()}`
+      transactionHash: transactionHash || `hash-${Date.now()}`
     });
 
     const { data } = await api.put(`/notes/${noteId}`, requestData);
@@ -107,15 +109,19 @@ class NoteService {
   }
 
   // Delete a note
-  async deleteNote(noteId) {
+  async deleteNote(noteId, transactionHash = null) {
     console.log('DELETE_NOTE Transaction:', {
       type: 'DELETE_NOTE',
       noteId: noteId,
       timestamp: Date.now(),
-      blockHash: `hash-${Date.now()}`
+      transactionHash: transactionHash || `hash-${Date.now()}`
     });
 
-    await api.delete(`/notes/${noteId}`);
+    const config = transactionHash ? {
+      data: { transactionHash }
+    } : {};
+    
+    await api.delete(`/notes/${noteId}`, config);
     return null;
   }
 

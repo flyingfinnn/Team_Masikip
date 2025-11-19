@@ -87,7 +87,12 @@ function Sidebar({
           >
             {walletButtonLabel()}
           </button>
-          <button className="action-btn new-note-btn" onClick={onCreateNote} title="New Note">
+          <button 
+            className={`action-btn new-note-btn ${!walletState?.connected ? 'disabled' : ''}`} 
+            onClick={onCreateNote} 
+            title={walletState?.connected ? 'New Note' : 'Connect wallet to create a note'}
+            disabled={!walletState?.connected}
+          >
             <span>📝</span>
           </button>
         </div>

@@ -55,8 +55,14 @@
   white-space: nowrap;
 }
 
-.action-btn:hover {
+.action-btn:hover:not(:disabled) {
   background-color: #3a3a3c;
+}
+
+.action-btn:disabled,
+.action-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .new-note-btn {
@@ -65,8 +71,14 @@
   font-weight: 500;
 }
 
-.new-note-btn:hover {
+.new-note-btn:hover:not(:disabled) {
   background-color: #0056cc;
+}
+
+.new-note-btn:disabled,
+.new-note-btn.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .wallet-connect {

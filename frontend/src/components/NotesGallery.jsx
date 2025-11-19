@@ -116,7 +116,13 @@ function NotesGallery({
           >
             {showPinnedOnly ? 'Show All' : 'Pinned Only'}
           </button>
-          <button className="primary-btn" type="button" onClick={onCreateNote}>
+          <button 
+            className={`primary-btn ${!walletState?.connected ? 'disabled' : ''}`} 
+            type="button" 
+            onClick={onCreateNote}
+            disabled={!walletState?.connected}
+            title={!walletState?.connected ? 'Connect wallet to create a note' : 'Create new note'}
+          >
             + New Note
           </button>
         </div>
