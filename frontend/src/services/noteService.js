@@ -156,9 +156,9 @@ class NoteService {
       time: noteDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       timestamp: new Date(backendNote.createdAt || now).getTime(),
       lastModified: new Date(backendNote.updatedAt || now).getTime(),
-      // Map priority string to isPinned boolean for backwards compatibility
-      isPinned: backendNote.priority === 'High' || backendNote.pinned === true,
-      priority: backendNote.priority || (backendNote.pinned ? 'High' : 'Medium'),
+      // isPinned is separate from priority - use explicit pinned field or default to false
+      isPinned: backendNote.pinned === true,
+      priority: backendNote.priority || 'Medium',
       isDeleted: isDeleted, // Use calculated value
       isSelected: false,
       tags: backendNote.tags || [],
@@ -179,8 +179,10 @@ class NoteService {
   }
 
   // Transform frontend priority to backend isPinned (for API compatibility)
+  // Note: Priority is now independent of pinned status
   priorityToPinned(priority) {
-    return priority === 'High';
+    // Pinned status is now managed separately, not derived from priority
+    return false;
   }
 
   // Transform backend priority to frontend priority
@@ -190,8 +192,10 @@ class NoteService {
   }
 
   // Transform backend isPinned to frontend priority (for API responses)
+  // Note: Priority is now independent of pinned status
   pinnedToPriority(isPinned) {
-    return isPinned ? 'High' : 'Medium';
+    // Don't automatically set priority based on pin status
+    return 'Medium';
   }
 }
 
