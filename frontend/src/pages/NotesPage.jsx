@@ -61,7 +61,7 @@ const fallbackWalletState = {
   error: null,
 };
 
-function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {} }) {
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => { } }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
@@ -99,54 +99,9 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   };
 
   const createNewNote = async () => {
-<<<<<<< HEAD
-    try {
-      setLoading(true);
-      console.log('Creating new note...');
-
-      // Create note via backend API
-      const backendNote = await noteService.createNote('New Note', '', walletState.address);
-      console.log('Backend note created:', backendNote);
-      const newNote = noteService.transformNote(backendNote);
-      console.log('Transformed note:', newNote);
-
-      // Update local state
-      const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
-      updatedNotes.unshift({ ...newNote, isSelected: true });
-      setNotes(updatedNotes);
-      setSelectedNoteId(newNote.id);
-
-    } catch (error) {
-      console.error('Failed to create note:', error);
-
-      // Fallback to local-only note creation if backend is unavailable
-      const fallbackNote = {
-        id: `local-${Date.now()}`,
-        title: 'New Note',
-        preview: '',
-        content: '',
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timestamp: Date.now(),
-        isSelected: true,
-        isPinned: false,
-        priority: 'Medium',
-        isDeleted: false,
-        tags: []
-      };
-
-      const updatedNotes = notes.map(note => ({ ...note, isSelected: false }));
-      updatedNotes.unshift(fallbackNote);
-      setNotes(updatedNotes);
-      setSelectedNoteId(fallbackNote.id);
-    } finally {
-      setLoading(false);
-    }
-=======
     // Open modal for new note creation
     setModalNote(null);
     setIsModalOpen(true);
->>>>>>> 8425a9656d6cc3624477cf85fb3a4c9cbadd3ff9
   };
 
   const selectNote = (noteId) => {
@@ -289,12 +244,13 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         await noteService.updateNotePriority(noteId, newIsPinned, walletState.address);
       }
 
-      // Update local state - only toggle isPinned, keep priority unchanged
+      // Update local state
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
           return {
             ...note,
             isPinned: newIsPinned,
+            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -311,6 +267,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           return {
             ...note,
             isPinned: newIsPinned,
+            priority: noteService.pinnedToPriority(newIsPinned),
             lastModified: Date.now()
           };
         }
@@ -391,17 +348,17 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     try {
       setLoading(true);
       const title = (content.split('\n')[0] || 'New Note').toString();
-      
+
       if (!noteId || String(noteId).startsWith('local-')) {
         // Creating new note
-        const created = await noteService.createNote(title, content);
+        const created = await noteService.createNote(title, content, walletState.address);
         await loadNotes();
         if (created && created.id) {
           setSelectedNoteId(created.id);
         }
       } else {
         // Updating existing note
-        await noteService.updateNote(noteId, content);
+        await noteService.updateNote(noteId, content, walletState.address);
         await loadNotes();
         setSelectedNoteId(noteId);
       }
@@ -420,46 +377,6 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   const selectedNote = notes.find(note => note.id === selectedNoteId);
 
   return (
-<<<<<<< HEAD
-    <div className="notes-app">
-      <Sidebar
-        notes={notes}
-        loading={loading}
-        onCreateNote={handleCreateNoteClick}
-        onSelectNote={selectNote}
-        onBackToGallery={handleBackToGallery}
-        walletState={walletState}
-        onWalletButtonClick={handleWalletButtonClick}
-      />
-      <NoteEditor
-        note={selectedNote}
-        onUpdateNote={updateNote}
-        onTogglePin={togglePin}
-        onSetPriority={setPriority}
-        onDeleteNote={deleteNote}
-        onRestoreNote={restoreNote}
-        onSave={async (noteId, content) => {
-          try {
-            setLoading(true);
-            const title = (content.split('\n')[0] || 'New Note').toString();
-            if (!noteId || String(noteId).startsWith('local-')) {
-              const created = await noteService.createNote(title, content, walletState.address);
-              await loadNotes();
-              if (created && created.id) {
-                setSelectedNoteId(created.id);
-              }
-            } else {
-              await noteService.updateNote(noteId, content, walletState.address);
-              await loadNotes();
-              setSelectedNoteId(noteId);
-            }
-          } catch (err) {
-            console.error('Save failed:', err);
-          } finally {
-            setLoading(false);
-          }
-        }}
-=======
     <>
       {viewMode === 'gallery' ? (
         <NotesGallery
@@ -470,10 +387,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           onDeleteNote={deleteNote}
           onTogglePin={togglePin}
           walletState={walletState}
-          />
+        />
       ) : (
         <div className="notes-app">
-          <Sidebar 
+          <Sidebar
             notes={notes}
             loading={loading}
             onCreateNote={handleCreateNoteClick}
@@ -482,7 +399,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
             walletState={walletState}
             onWalletButtonClick={onWalletButtonClick}
           />
-          <NoteEditor 
+          <NoteEditor
             note={selectedNote}
             onUpdateNote={updateNote}
             onTogglePin={togglePin}
@@ -494,13 +411,13 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
                 setLoading(true);
                 const title = (content.split('\n')[0] || 'New Note').toString();
                 if (!noteId || String(noteId).startsWith('local-')) {
-                  const created = await noteService.createNote(title, content);
+                  const created = await noteService.createNote(title, content, walletState.address);
                   await loadNotes();
                   if (created && created.id) {
                     setSelectedNoteId(created.id);
                   }
                 } else {
-                  await noteService.updateNote(noteId, content);
+                  await noteService.updateNote(noteId, content, walletState.address);
                   await loadNotes();
                   setSelectedNoteId(noteId);
                 }
@@ -513,7 +430,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           />
         </div>
       )}
-      
+
       <NoteModal
         isOpen={isModalOpen}
         onClose={handleModalClose}
@@ -521,7 +438,6 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         onSave={handleModalSave}
         onDelete={deleteNote}
         onSetPriority={setPriority}
->>>>>>> 8425a9656d6cc3624477cf85fb3a4c9cbadd3ff9
       />
     </>
   );
