@@ -238,6 +238,75 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
     }
   }
 
+  // Export transactions to CSV
+  function exportToCSV() {
+    if (transactions.length === 0) {
+      alert('No transactions to export');
+      return;
+    }
+
+    // CSV headers
+    const headers = [
+      'Transaction ID',
+      'Action',
+      'Label',
+      'Description',
+      'Amount',
+      'Currency',
+      'Status',
+      'Timestamp',
+      'Type'
+    ];
+
+    // Convert transactions to CSV rows
+    const csvRows = transactions.map(txn => {
+      const id = txn.id || 'unknown';
+      const actionType = txn.actionType || txn.type || '';
+      const label = (txn.label || 'Transaction').replace(/"/g, '""'); // Escape quotes
+      const description = (txn.description || '').replace(/"/g, '""'); // Escape quotes
+      const amount = txn.amount || 0;
+      const currency = txn.currency || 'ADA';
+      const status = txn.status || 'unknown';
+      const timestamp = txn.timestamp ? new Date(txn.timestamp).toISOString() : '';
+      const type = txn.type || 'debit';
+
+      // Wrap fields in quotes to handle commas and special characters
+      return [
+        `"${id}"`,
+        `"${actionType}"`,
+        `"${label}"`,
+        `"${description}"`,
+        amount,
+        `"${currency}"`,
+        `"${status}"`,
+        `"${timestamp}"`,
+        `"${type}"`
+      ].join(',');
+    });
+
+    // Combine headers and rows
+    const csvContent = [
+      headers.join(','),
+      ...csvRows
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    // Generate filename with timestamp
+    const dateStr = new Date().toISOString().split('T')[0];
+    const filename = `wallet-transactions-${dateStr}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   return (
     <div className="wallet-page">
       <div className="wallet-page__header">
@@ -309,7 +378,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               <option value={SORT_OPTIONS.STATUS}>By Status</option>
               <option value={SORT_OPTIONS.ACTION}>By Action</option>
             </select>
-            <button type="button">Export CSV</button>
+            <button type="button" onClick={exportToCSV}>Export CSV</button>
           </div>
         </header>
 
