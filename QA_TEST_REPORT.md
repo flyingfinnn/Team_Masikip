@@ -2,8 +2,7 @@
 
 **QA Tester:** Apurado, Jhovynn Aldrich  
 **Date:** December 10, 2025  
-**Branch Tested:** refined  
-**Testing Duration:** 4 hours  
+**Branch Tested:** refined   
 **Test Type:** Frontend Functionality & Blockchain Integration
 
 ---

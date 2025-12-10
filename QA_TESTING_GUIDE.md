@@ -64,13 +64,13 @@ psql -U postgres -d notes_db
 ### Browser Requirements
 - Chrome/Edge (recommended for Cardano wallet extensions)
 - Install a Cardano wallet extension:
-  - **Nami Wallet** (recommended)
+  - **Lace** (recommended)
   - **Eternl**
   - **Flint**
   - **Yoroi**
 
 ### Test Wallet Setup
-- Switch wallet to **Preprod Testnet** (NOT Mainnet)
+- Switch wallet to **Preview Testnet** (NOT Mainnet)
 - Obtain test ADA from [Cardano Testnet Faucet](https://docs.cardano.org/cardano-testnet/tools/faucet/)
 - Minimum 10 ADA recommended for testing
 
