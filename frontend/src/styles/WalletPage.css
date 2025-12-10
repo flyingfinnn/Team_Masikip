@@ -123,6 +123,23 @@
   gap: 12px;
 }
 
+.transaction-search {
+  min-width: 220px;
+  background: var(--wallet-panel);
+  border: 1px solid var(--wallet-border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--wallet-text);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.transaction-search:focus {
+  border-color: var(--wallet-highlight);
+  background: rgba(53, 198, 149, 0.05);
+}
+
 .sort-select {
   background: var(--wallet-panel);
   border: 1px solid var(--wallet-border);
@@ -247,6 +264,17 @@
 .txn-details small {
   color: var(--wallet-muted);
   font-size: 12px;
+}
+
+.txn-note-snippet {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-size: 11px;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
 }
 
 .txn-type {

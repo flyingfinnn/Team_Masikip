@@ -142,7 +142,9 @@ function Sidebar({
                     </div>
                     <div className="note-meta">
                       <span className="note-date">{note.time}</span>
-                      <span className="note-status">📄 Notes</span>
+                      <span className={`note-status-pill ${note.status || 'unknown'}`}>
+                        {note.status ? note.status.toUpperCase() : 'UNKNOWN'}
+                      </span>
                       <span className="note-priority">Priority: {note.priority || 'Medium'}</span>
                     </div>
                     <div className="note-preview">{note.preview}</div>
@@ -177,7 +179,9 @@ function Sidebar({
                     </div>
                     <div className="note-meta">
                       <span className="note-date">{note.time}</span>
-                      <span className="note-status">📄 Notes</span>
+                      <span className={`note-status-pill ${note.status || 'unknown'}`}>
+                        {note.status ? note.status.toUpperCase() : 'UNKNOWN'}
+                      </span>
                       <span className="note-priority">Priority: {note.priority || 'Medium'}</span>
                     </div>
                     <div className="note-preview">{note.preview}</div>

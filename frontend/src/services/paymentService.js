@@ -1,5 +1,4 @@
 import { Transaction } from '@meshsdk/core'
-import { formatContent } from './formatContent'
 
 const PAYMENT_AMOUNTS = {
   CREATE: 0.176985, // 0.176985 ADA to create a note
@@ -29,6 +28,47 @@ class PaymentService {
     }
 
     let amountLovelace = Math.floor(amountAda * ADA_TO_LOVELACE)
+
+    // Professor's requirement: Chunk strings to 64-byte limit for Cardano metadata
+    const chunkString = (value, maxBytes = 64) => {
+      if (typeof value !== 'string' || !value) return []
+
+      const chunks = []
+      let currentChunk = ''
+
+      // Iterate through each character
+      for (const char of value) {
+        const testChunk = currentChunk + char
+        // Check if adding this character would exceed 64 bytes (UTF-8)
+        const byteLength = new TextEncoder().encode(testChunk).length
+
+        if (byteLength > maxBytes) {
+          if (currentChunk) chunks.push(currentChunk)
+          currentChunk = char
+        } else {
+          currentChunk = testChunk
+        }
+      }
+
+      if (currentChunk) chunks.push(currentChunk)
+      return chunks
+    }
+
+    const sanitizeMetadata = (meta) => {
+      if (!meta || typeof meta !== 'object') return meta
+      const copy = { ...meta }
+      // Chunk the potentially large fields
+      if (copy.contentAfter) copy.contentAfter = chunkString(copy.contentAfter)
+      if (copy.contentBefore) copy.contentBefore = chunkString(copy.contentBefore)
+      if (copy.title) copy.title = chunkString(copy.title)
+      // Generic safeguard: chunk any string fields longer than 200 chars
+      Object.keys(copy).forEach((key) => {
+        if (typeof copy[key] === 'string' && copy[key].length > 200) {
+          copy[key] = chunkString(copy[key])
+        }
+      })
+      return copy
+    }
 
     try {
       // Validate recipient address
@@ -73,22 +113,23 @@ class PaymentService {
       tx.sendLovelace(recipientAddress, amountLovelace.toString())
 
       // Attach metadata to transaction
-      // Using custom label 42819 (not reserved - see CIP-10 registry)
-      // Professor's requirement: metadata with action, note content, timestamp, and note_id
+      // Professor's requirement: Use custom label 42819 and specific metadata structure
       if (metadata && Object.keys(metadata).length > 0) {
         const label = 42819 // Custom label for Masikip Notes app
 
-        // Format metadata according to professor's specification
+        // Extract note content (use contentAfter for CREATE/UPDATE, contentBefore for DELETE)
+        const noteContent = metadata.contentAfter || metadata.contentBefore || ''
+
+        // Build metadata with professor's required structure
         const metadataPayload = {
-          action: operation, // CREATE, UPDATE, DELETE
-          note: formatContent(metadata.contentAfter || metadata.contentBefore || ''), // Chunked to 64-byte limit
-          created_at: new Date().toISOString(),
-          note_id: metadata.noteId ? metadata.noteId.toString() : null, // Optional: for reference
+          action: operation, // CREATE, UPDATE, DELETE (professor uses 'action' not 'operation')
+          note: chunkString(noteContent), // Chunked to 64-byte limit
+          created_at: new Date().toISOString(), // ISO timestamp
+          note_id: metadata.noteId ? metadata.noteId.toString() : null, // Note ID for reference
         }
 
         // Use Mesh SDK's metadataValue method
         try {
-          // Mesh SDK uses metadataValue(label, metadataObject) method
           if (typeof tx.metadataValue === 'function') {
             tx.metadataValue(label, metadataPayload)
             console.log('Metadata attached to transaction:', metadataPayload)
