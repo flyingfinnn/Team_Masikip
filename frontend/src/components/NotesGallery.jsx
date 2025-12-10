@@ -187,6 +187,9 @@ function NotesGallery({
                         <span className={`priority-${(note.priority || 'Medium').toLowerCase()}`}>
                           {note.priority || 'Medium'} priority
                         </span>
+                        <span className={`note-status-pill ${note.status || 'unknown'}`}>
+                          {note.status ? note.status.toUpperCase() : 'UNKNOWN'}
+                        </span>
                         <span>{note.time || ''}</span>
                       </div>
                     </article>
@@ -253,6 +256,9 @@ function NotesGallery({
                       <div className="note-card-footer">
                         <span className={`priority-${(note.priority || 'Medium').toLowerCase()}`}>
                           {note.priority || 'Medium'} priority
+                        </span>
+                        <span className={`note-status-pill ${note.status || 'unknown'}`}>
+                          {note.status ? note.status.toUpperCase() : 'UNKNOWN'}
                         </span>
                         <span>{note.time || ''}</span>
                       </div>

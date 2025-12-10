@@ -85,8 +85,33 @@
   outline: none;
 }
 
-.status-pill {
-  display: none;
+.note-status-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #f5f5f5;
+}
+
+.note-status-pill.confirmed {
+  background: rgba(52, 199, 89, 0.18);
+  border-color: rgba(52, 199, 89, 0.4);
+  color: #8af2aa;
+}
+
+.note-status-pill.pending {
+  background: rgba(255, 204, 0, 0.18);
+  border-color: rgba(255, 204, 0, 0.35);
+  color: #ffd666;
+}
+
+.note-status-pill.unknown {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #d1d1d1;
 }
 
 .notes-section {

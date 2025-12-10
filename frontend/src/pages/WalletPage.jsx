@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import '../styles/WalletPage.css';
 
 const SORT_OPTIONS = {
@@ -10,10 +10,38 @@ const SORT_OPTIONS = {
   ACTION: 'action',
 }
 
+const TX_CACHE_KEY = 'masikip_tx_cache';
+
+const loadCachedTransactions = (address) => {
+  if (!address) return null;
+  try {
+    const raw = localStorage.getItem(TX_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed[address] || null;
+  } catch (e) {
+    console.warn('Failed to load tx cache', e);
+    return null;
+  }
+};
+
+const saveCachedTransactions = (address, txs) => {
+  if (!address) return;
+  try {
+    const raw = localStorage.getItem(TX_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    parsed[address] = { timestamp: Date.now(), txs };
+    localStorage.setItem(TX_CACHE_KEY, JSON.stringify(parsed));
+  } catch (e) {
+    console.warn('Failed to save tx cache', e);
+  }
+};
+
 function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRecorded, onStatusUpdate }) {
   const [transactions, setTransactions] = useState([]);
   const [loadingTxs, setLoadingTxs] = useState(false);
   const [sortBy, setSortBy] = useState(SORT_OPTIONS.NEWEST);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const isConnected = walletState?.connected === true;
   const walletName = walletState?.walletName || 'Ledgee Vault';
@@ -23,9 +51,109 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
   const pendingFeesAda = typeof walletState?.pendingFeesAda === 'number' ? walletState.pendingFeesAda : null;
   const localTransactions = walletState?.localTransactions || [];
 
+  const filterTransactions = (txs = [], term = '') => {
+    const q = term.trim().toLowerCase();
+    if (!q) return txs;
+
+    return txs.filter((tx) => {
+      const id = (tx.id || '').toString().toLowerCase();
+      const action = (tx.actionType || tx.type || '').toLowerCase();
+      const details = `${tx.label || ''} ${tx.description || ''}`.toLowerCase();
+      const amount = typeof tx.amount === 'number' ? tx.amount.toFixed(2) : `${tx.amount || ''}`;
+      const status = (tx.status || '').toLowerCase();
+
+      return (
+        id.includes(q) ||
+        action.includes(q) ||
+        details.includes(q) ||
+        amount.toLowerCase().includes(q) ||
+        status.includes(q)
+      );
+    });
+  };
+
+  const handleExportCSV = () => {
+    const filtered = filterTransactions(transactions, searchTerm);
+    if (filtered.length === 0) {
+      return;
+    }
+
+    // CSV Header with better formatting
+    const headers = ['Date & Time', 'Transaction ID', 'Action Type', 'Description', 'Note Content', 'Amount (ADA)', 'Status'];
+    
+    // CSV Rows with note snippets
+    const rows = filtered.map(tx => {
+      const date = tx.timestamp ? new Date(tx.timestamp).toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      }) : 'N/A';
+      const txId = tx.id || 'N/A';
+      const action = tx.actionType || tx.type || 'N/A';
+      const description = tx.label || 'Transaction';
+      
+      // Extract note content from metadata
+      let noteContent = '';
+      if (tx.metadata) {
+        if (tx.metadata.contentAfter) {
+          // For CREATE/UPDATE, show the new content
+          noteContent = tx.metadata.contentAfter.slice(0, 100);
+          if (tx.metadata.contentAfter.length > 100) noteContent += '...';
+        } else if (tx.metadata.contentBefore) {
+          // For DELETE, show what was deleted
+          noteContent = tx.metadata.contentBefore.slice(0, 100);
+          if (tx.metadata.contentBefore.length > 100) noteContent += '...';
+        }
+      }
+      noteContent = noteContent.replace(/"/g, '""'); // Escape quotes for CSV
+      
+      const amount = tx.amount ? tx.amount.toFixed(6) : '0.000000';
+      const status = (tx.status || 'unknown').toUpperCase();
+      
+      return [date, txId, action, description, noteContent, amount, status];
+    });
+
+    // Combine headers and rows with proper CSV formatting
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
+    const filename = `Masikip_Transactions_${timestamp[0]}_${timestamp[1].split('-')[0]}.csv`;
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   useEffect(() => {
     if (isConnected && walletState?.address && fetchTransactionHistory) {
-      setLoadingTxs(true);
+      // Try cached transactions first to avoid reload flash on tab switch
+      const cached = loadCachedTransactions(walletState.address);
+      const cacheFresh = cached && Date.now() - (cached.timestamp || 0) < 60_000; // 1 minute freshness
+      if (cached?.txs) {
+        setTransactions(cached.txs);
+        setLoadingTxs(!cacheFresh); // only show loader if cache is stale/missing
+        if (cacheFresh) {
+          return; // skip fetch if cache is fresh
+        }
+      } else {
+        setLoadingTxs(true);
+      }
+
       fetchTransactionHistory(walletState.address)
         .then((koiosTxs) => {
           // Merge Koios transactions with local transactions
@@ -136,11 +264,10 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
           }
           
           // Convert to array, filter out credit transactions, and apply sorting
-          const merged = Array.from(localTxMap.values())
-            .filter((tx) => tx.type !== 'credit') // Only show debit transactions (payments sent)
-          const sorted = sortTransactions(merged, sortBy);
+          const merged = Array.from(localTxMap.values()).filter((tx) => tx.type !== 'credit'); // Only show debit transactions (payments sent)
           
-          setTransactions(sorted);
+          setTransactions(merged);
+          saveCachedTransactions(walletState.address, merged);
           setLoadingTxs(false);
         })
         .catch((error) => {
@@ -183,8 +310,8 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
           
           // Filter out credit transactions (only show debit/payments sent)
           const filteredLocal = updatedLocal.filter((tx) => tx.type !== 'credit')
-          const sortedLocal = sortTransactions(filteredLocal, sortBy);
-          setTransactions(sortedLocal);
+          setTransactions(filteredLocal);
+          saveCachedTransactions(walletState.address, filteredLocal);
           setLoadingTxs(false);
         });
     } else if (localTransactions.length > 0) {
@@ -201,8 +328,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
       });
       // Filter out credit transactions (only show debit/payments sent)
       const filteredLocal = updatedLocal.filter((tx) => tx.type !== 'credit')
-      const sortedLocal = sortTransactions(filteredLocal, sortBy);
-      setTransactions(sortedLocal);
+      setTransactions(filteredLocal);
     } else {
       setTransactions([]);
     }
@@ -237,6 +363,11 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
         return sorted;
     }
   }
+
+  const displayedTransactions = useMemo(() => {
+    const filtered = filterTransactions(transactions, searchTerm);
+    return sortTransactions(filtered, sortBy);
+  }, [transactions, searchTerm, sortBy]);
 
   return (
     <div className="wallet-page">
@@ -296,6 +427,14 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
             <p>Live feed from the Cardano settlement layer</p>
           </div>
           <div className="transaction-controls">
+            <input
+              type="text"
+              className="transaction-search"
+              placeholder="Search transactions..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              title="Search by Transaction ID, Action, Details, Amount, Status"
+            />
             <select 
               value={sortBy} 
               onChange={(e) => setSortBy(e.target.value)}
@@ -309,7 +448,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               <option value={SORT_OPTIONS.STATUS}>By Status</option>
               <option value={SORT_OPTIONS.ACTION}>By Action</option>
             </select>
-            <button type="button">Export CSV</button>
+            <button type="button" onClick={handleExportCSV}>Export CSV</button>
           </div>
         </header>
 
@@ -329,14 +468,14 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
                   Loading transaction history...
                 </span>
               </div>
-            ) : transactions.length === 0 ? (
+            ) : displayedTransactions.length === 0 ? (
               <div className="transaction-row">
                 <span colSpan="5" style={{ textAlign: 'center', padding: '20px', color: 'rgba(255,255,255,0.5)' }}>
                   {isConnected ? 'No transactions found' : 'Connect wallet to view transactions'}
                 </span>
               </div>
             ) : (
-              transactions
+              displayedTransactions
                 .filter((txn) => txn && txn.id) // Filter out transactions without id
                 .map((txn) => {
                   const id = txn.id || 'unknown'
@@ -387,6 +526,12 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
                       <span className="txn-details">
                         <strong>{label}</strong>
                         <small>{description}</small>
+                        {txn.metadata && (txn.metadata.contentAfter || txn.metadata.contentBefore) && (
+                          <small className="txn-note-snippet">
+                            📝 {(txn.metadata.contentAfter || txn.metadata.contentBefore).slice(0, 60)}
+                            {(txn.metadata.contentAfter || txn.metadata.contentBefore).length > 60 ? '...' : ''}
+                          </small>
+                        )}
                         <small>{new Date(timestamp).toLocaleString()}</small>
                       </span>
                       <span className="txn-amount">

@@ -118,6 +118,52 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     });
   };
 
+  // Derive on-chain status for a note from local transaction history
+  const getNoteStatus = (note, localTransactions = []) => {
+    if (!note) return 'unknown';
+
+    const statusPriority = { confirmed: 3, pending: 2, unknown: 1 };
+
+    const candidates = [];
+
+    // Prefer direct hash match if the note carries a transaction hash
+    if (note.transactionHash) {
+      const byHash = localTransactions.find((tx) => tx.id === note.transactionHash);
+      if (byHash) candidates.push(byHash);
+    }
+
+    // Match by metadata.noteId (used by UPDATE/DELETE)
+    const byNoteId = localTransactions.find(
+      (tx) => tx?.metadata?.noteId && String(tx.metadata.noteId) === String(note.id)
+    );
+    if (byNoteId) candidates.push(byNoteId);
+
+    // Heuristic: match CREATE/UPDATE by content (helps when transactionHash/noteId are missing)
+    const contentMatch = localTransactions.find((tx) => {
+      const meta = tx?.metadata || {};
+      const action = (meta.actionType || tx.actionType || '').toUpperCase();
+      if (!['CREATE', 'UPDATE'].includes(action)) return false;
+      if (!meta.contentAfter && !meta.contentBefore) return false;
+      const txContent = meta.contentAfter || meta.contentBefore || '';
+      return txContent === (note.content || '');
+    });
+    if (contentMatch) candidates.push(contentMatch);
+
+    if (candidates.length === 0) return 'unknown';
+
+    // Pick the highest-priority status among candidates
+    const best = candidates.reduce((acc, tx) => {
+      const st = (tx.status || 'unknown').toLowerCase();
+      const priority = statusPriority[st] || 0;
+      if (!acc || priority > acc.priority) {
+        return { status: st, priority };
+      }
+      return acc;
+    }, null);
+
+    return best?.status || 'unknown';
+  };
+
   // Filter notes to only show those with confirmed CREATE transactions
   const getConfirmedNotes = (notesList, localTransactions) => {
     if (!localTransactions || localTransactions.length === 0) {
@@ -144,8 +190,14 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     });
   };
 
+  // Enrich notes with status from local transactions
+  const notesWithStatus = notes.map((note) => ({
+    ...note,
+    status: getNoteStatus(note, walletState.localTransactions || []),
+  }));
+
   // Filter notes based on search term and confirmation status
-  const confirmedNotes = getConfirmedNotes(notes, walletState.localTransactions || []);
+  const confirmedNotes = getConfirmedNotes(notesWithStatus, walletState.localTransactions || []);
   const filteredNotes = confirmedNotes.filter((note) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();

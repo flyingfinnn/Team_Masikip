@@ -29,6 +29,35 @@ class PaymentService {
 
     let amountLovelace = Math.floor(amountAda * ADA_TO_LOVELACE)
 
+    const chunkString = (value, chunkSize = 200) => {
+      if (typeof value !== 'string') return value
+      if (value.length <= chunkSize) return value
+      const chunks = []
+      for (let i = 0; i < value.length; i += chunkSize) {
+        chunks.push(value.slice(i, i + chunkSize))
+      }
+      return {
+        chunks,
+        totalLength: value.length,
+      }
+    }
+
+    const sanitizeMetadata = (meta) => {
+      if (!meta || typeof meta !== 'object') return meta
+      const copy = { ...meta }
+      // Chunk the potentially large fields
+      if (copy.contentAfter) copy.contentAfter = chunkString(copy.contentAfter)
+      if (copy.contentBefore) copy.contentBefore = chunkString(copy.contentBefore)
+      if (copy.title) copy.title = chunkString(copy.title)
+      // Generic safeguard: chunk any string fields longer than 200 chars
+      Object.keys(copy).forEach((key) => {
+        if (typeof copy[key] === 'string' && copy[key].length > 200) {
+          copy[key] = chunkString(copy[key])
+        }
+      })
+      return copy
+    }
+
     try {
       // Validate recipient address
       if (!recipientAddress || recipientAddress.includes('...')) {
@@ -73,18 +102,18 @@ class PaymentService {
       
       // Attach metadata to transaction (label 674 is commonly used for custom metadata per CIP-20)
       if (metadata && Object.keys(metadata).length > 0) {
-        const metadataPayload = {
+        const metadataPayload = sanitizeMetadata({
           operation: operation, // CREATE, UPDATE, DELETE
           timestamp: new Date().toISOString(),
           ...metadata, // Include any additional metadata (noteId, contentBefore, contentAfter, etc.)
-        }
+        })
         
         // Use Mesh SDK's metadataValue method with label 674 (standard for custom metadata)
         try {
           // Mesh SDK uses metadataValue(label, metadataObject) method
           if (typeof tx.metadataValue === 'function') {
             tx.metadataValue(674, metadataPayload)
-            console.log('Metadata attached to transaction:', metadataPayload)
+            console.log('Metadata attached to transaction (chunked):', metadataPayload)
           } else {
             // Fallback: try alternative method names if available
             if (typeof tx.setMetadata === 'function') {
