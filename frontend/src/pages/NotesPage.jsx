@@ -648,6 +648,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     try {
       setLoading(true);
       const title = (content.split('\n')[0] || 'New Note').toString();
+      if (!content.trim()) {
+        showToast('Please enter note content before saving.', 'warning', 4000);
+        return;
+      }
       
       if (!noteId || String(noteId).startsWith('local-')) {
         // Creating new note - send payment first
@@ -730,6 +734,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
             onSave={async (noteId, content) => {
               try {
                 setLoading(true);
+                if (!content.trim()) {
+                  showToast('Please enter note content before saving.', 'warning', 4000);
+                  return;
+                }
                 const title = (content.split('\n')[0] || 'New Note').toString();
                 if (!noteId || String(noteId).startsWith('local-')) {
                   const created = await noteService.createNote(title, content);
