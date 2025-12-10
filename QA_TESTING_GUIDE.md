@@ -1,7 +1,7 @@
 # 🧪 QA Testing Guide - Ledgee Notes Application
 
 **Project:** Team Masikip - Blockchain-Based Notes Application  
-**Tester:** [Your Name]  
+**Tester:** Apurado, Jhovynn Aldrich  
 **Date:** December 10, 2025  
 **Branch:** refined  
 **Testing Environment:** Development

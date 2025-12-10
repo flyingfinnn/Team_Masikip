@@ -1,6 +1,6 @@
 # 🧪 QA Testing Report - Ledgee Notes Application
 
-**QA Tester:** [Your Name Here]  
+**QA Tester:** Apurado, Jhovynn Aldrich  
 **Date:** December 10, 2025  
 **Branch Tested:** refined  
 **Testing Duration:** 4 hours  
