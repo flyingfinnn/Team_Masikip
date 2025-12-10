@@ -29,17 +29,29 @@ class PaymentService {
 
     let amountLovelace = Math.floor(amountAda * ADA_TO_LOVELACE)
 
-    const chunkString = (value, chunkSize = 200) => {
-      if (typeof value !== 'string') return value
-      if (value.length <= chunkSize) return value
+    // Professor's requirement: Chunk strings to 64-byte limit for Cardano metadata
+    const chunkString = (value, maxBytes = 64) => {
+      if (typeof value !== 'string' || !value) return []
+
       const chunks = []
-      for (let i = 0; i < value.length; i += chunkSize) {
-        chunks.push(value.slice(i, i + chunkSize))
+      let currentChunk = ''
+
+      // Iterate through each character
+      for (const char of value) {
+        const testChunk = currentChunk + char
+        // Check if adding this character would exceed 64 bytes (UTF-8)
+        const byteLength = new TextEncoder().encode(testChunk).length
+
+        if (byteLength > maxBytes) {
+          if (currentChunk) chunks.push(currentChunk)
+          currentChunk = char
+        } else {
+          currentChunk = testChunk
+        }
       }
-      return {
-        chunks,
-        totalLength: value.length,
-      }
+
+      if (currentChunk) chunks.push(currentChunk)
+      return chunks
     }
 
     const sanitizeMetadata = (meta) => {
@@ -69,11 +81,11 @@ class PaymentService {
       try {
         const walletAddresses = await wallet.getUsedAddresses()
         walletAddress = walletAddresses?.[0]
-        
+
         // If sending to self, we need to handle it differently to avoid minimum UTXO issues
         if (walletAddress && recipientAddress === walletAddress) {
           console.warn('Sending payment to own address (testing mode)')
-          
+
           // When sending to self with a small amount (like 0.5 ADA for DELETE), 
           // we need to ensure there's enough for fees without creating a dust UTXO
           // Minimum UTXO is typically 1 ADA, so for small amounts sent to self,
@@ -96,30 +108,38 @@ class PaymentService {
 
       // Use Mesh SDK Transaction builder
       const tx = new Transaction({ initiator: wallet })
-      
+
       // Send ADA to recipient
       tx.sendLovelace(recipientAddress, amountLovelace.toString())
-      
-      // Attach metadata to transaction (label 674 is commonly used for custom metadata per CIP-20)
+
+      // Attach metadata to transaction
+      // Professor's requirement: Use custom label 42819 and specific metadata structure
       if (metadata && Object.keys(metadata).length > 0) {
-        const metadataPayload = sanitizeMetadata({
-          operation: operation, // CREATE, UPDATE, DELETE
-          timestamp: new Date().toISOString(),
-          ...metadata, // Include any additional metadata (noteId, contentBefore, contentAfter, etc.)
-        })
-        
-        // Use Mesh SDK's metadataValue method with label 674 (standard for custom metadata)
+        const label = 42819 // Custom label for Masikip Notes app
+
+        // Extract note content (use contentAfter for CREATE/UPDATE, contentBefore for DELETE)
+        const noteContent = metadata.contentAfter || metadata.contentBefore || ''
+
+        // Build metadata with professor's required structure
+        const metadataPayload = {
+          action: operation, // CREATE, UPDATE, DELETE (professor uses 'action' not 'operation')
+          note: chunkString(noteContent), // Chunked to 64-byte limit
+          created_at: new Date().toISOString(), // ISO timestamp
+          note_id: metadata.noteId ? metadata.noteId.toString() : null, // Note ID for reference
+        }
+
+        // Use Mesh SDK's metadataValue method
         try {
-          // Mesh SDK uses metadataValue(label, metadataObject) method
           if (typeof tx.metadataValue === 'function') {
-            tx.metadataValue(674, metadataPayload)
-            console.log('Metadata attached to transaction (chunked):', metadataPayload)
+            tx.metadataValue(label, metadataPayload)
+            console.log('Metadata attached to transaction:', metadataPayload)
+            console.log('Note content chunked into', metadataPayload.note.length, 'parts')
           } else {
             // Fallback: try alternative method names if available
             if (typeof tx.setMetadata === 'function') {
-              tx.setMetadata(674, metadataPayload)
+              tx.setMetadata(label, metadataPayload)
             } else if (typeof tx.setAuxiliaryData === 'function') {
-              tx.setAuxiliaryData({ 674: metadataPayload })
+              tx.setAuxiliaryData({ [label]: metadataPayload })
             } else {
               console.warn('Metadata attachment method not found, transaction will proceed without metadata')
             }
@@ -130,7 +150,7 @@ class PaymentService {
           // Don't throw - metadata is optional, transaction should still succeed
         }
       }
-      
+
       // Build and sign the transaction
       const unsignedTx = await tx.build()
       const signedTx = await wallet.signTx(unsignedTx)
@@ -146,10 +166,10 @@ class PaymentService {
     } catch (error) {
       console.error(`Failed to send ${operation} payment:`, error)
       console.error('Full error object:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2))
-      
+
       // Extract more useful error message from various error formats
       let errorMessage = 'Payment transaction failed'
-      
+
       // TxSendError from Mesh SDK might have different structure
       // Try to extract from various possible locations
       if (error?.message) {
@@ -190,10 +210,10 @@ class PaymentService {
           errorMessage = errorStr
         }
       }
-      
+
       // Check for common error types and provide user-friendly messages
       const lowerMessage = errorMessage.toLowerCase()
-      
+
       if (lowerMessage.includes('insufficient') || lowerMessage.includes('balance') || lowerMessage.includes('not enough')) {
         errorMessage = 'Insufficient balance for transaction (including fees). Please ensure you have enough ADA.'
       } else if (lowerMessage.includes('address') || lowerMessage.includes('invalid address') || lowerMessage.includes('serializing outputs')) {
@@ -221,7 +241,7 @@ class PaymentService {
           errorMessage = 'Transaction failed. Please check your wallet balance and try again.'
         }
       }
-      
+
       // If we still have a generic message, try to include original error details
       if (errorMessage === 'Payment transaction failed' && error?.message) {
         errorMessage = `Transaction failed: ${error.message}`
@@ -229,7 +249,7 @@ class PaymentService {
         // Last resort - show the operation type
         errorMessage = `${operation} transaction failed. Please check your wallet and try again.`
       }
-      
+
       throw new Error(errorMessage)
     }
   }
