@@ -1,39 +1,37 @@
-package csit360.g6.team.masikip.model;
+package csit360.g6.team.masikip.dto;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
 
-@Entity
-@Table(name = "notes")
-public class Note {
-
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+public class NoteDTO {
     private Long noteId;
-
-    @Column(nullable = false, columnDefinition = "TEXT")
     private String title;
-
-    @Column(columnDefinition = "TEXT")
-    private String content; // The most recent content
-
-    @Column(name = "ipfs_hash")
-    private String ipfsHash; // IPFS hash for decentralized storage
-
-    @Column(name = "transaction_hash")
-    private String transactionHash; // Blockchain transaction hash
-
-    @Column(name = "status") // Made nullable for backward compatibility
-    private String status = "pending";
-
-    private String priority; // e.g., "High", "Medium", "Low"
-
-    private boolean isActive; // FOR SOFT DELETES
-
+    private String content; // Retrieved from IPFS
+    private String ipfsHash;
+    private String transactionHash;
+    private String status;
+    private String priority;
     private LocalDateTime createdAt;
-
     private LocalDateTime updatedAt;
 
+    // Constructors
+    public NoteDTO() {
+    }
+
+    public NoteDTO(Long noteId, String title, String content, String ipfsHash,
+            String transactionHash, String status, String priority,
+            LocalDateTime createdAt, LocalDateTime updatedAt) {
+        this.noteId = noteId;
+        this.title = title;
+        this.content = content;
+        this.ipfsHash = ipfsHash;
+        this.transactionHash = transactionHash;
+        this.status = status;
+        this.priority = priority;
+        this.createdAt = createdAt;
+        this.updatedAt = updatedAt;
+    }
+
+    // Getters and Setters
     public Long getNoteId() {
         return noteId;
     }
@@ -88,14 +86,6 @@ public class Note {
 
     public void setPriority(String priority) {
         this.priority = priority;
-    }
-
-    public boolean isActive() {
-        return isActive;
-    }
-
-    public void setActive(boolean active) {
-        isActive = active;
     }
 
     public LocalDateTime getCreatedAt() {

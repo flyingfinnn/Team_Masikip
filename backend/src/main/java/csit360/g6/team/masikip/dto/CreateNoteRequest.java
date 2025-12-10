@@ -4,7 +4,7 @@ public class CreateNoteRequest {
 
     private String title;
     private String content;
-
+    private String transactionHash;
 
     public String getTitle() {
         return title;
@@ -20,5 +20,13 @@ public class CreateNoteRequest {
 
     public void setContent(String content) {
         this.content = content;
+    }
+
+    public String getTransactionHash() {
+        return transactionHash;
+    }
+
+    public void setTransactionHash(String transactionHash) {
+        this.transactionHash = transactionHash;
     }
 }

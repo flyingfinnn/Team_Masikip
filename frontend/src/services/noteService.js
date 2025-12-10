@@ -130,9 +130,16 @@ class NoteService {
     const config = transactionHash ? {
       data: { transactionHash }
     } : {};
-    
+
     await api.delete(`/notes/${noteId}`, config);
     return null;
+  }
+
+  // Check and update pending transaction statuses
+  async checkPendingTransactions() {
+    console.log('Checking pending transactions...');
+    await api.post('/notes/check-pending');
+    console.log('Pending transaction check completed');
   }
 
   // Transform backend note to frontend format
@@ -175,6 +182,7 @@ class NoteService {
       // isPinned is separate from priority - use explicit pinned field or default to false
       isPinned: backendNote.pinned === true,
       priority: backendNote.priority || 'Medium',
+      status: backendNote.status || 'pending', // Include status field from backend
       isDeleted: isDeleted, // Use calculated value
       isSelected: false,
       tags: backendNote.tags || [],

@@ -31,15 +31,23 @@ class PaymentService {
 
     // Professor's requirement: Chunk strings to 64-byte limit for Cardano metadata
     const chunkString = (value, maxBytes = 64) => {
-      if (typeof value !== 'string' || !value) return []
+      if (typeof value !== 'string' || !value) return value
 
+      // Check total byte length
+      const totalBytes = new TextEncoder().encode(value).length
+
+      // CASE 1: SHORT STRING (FITS IN ONE CHUNK) - return as single string
+      if (totalBytes <= maxBytes) {
+        return value
+      }
+
+      // CASE 2: LONG STRING (NEEDS SPLITTING) - return array of chunks
       const chunks = []
       let currentChunk = ''
 
-      // Iterate through each character
+      // Iterate through each character and build chunks by byte count
       for (const char of value) {
         const testChunk = currentChunk + char
-        // Check if adding this character would exceed 64 bytes (UTF-8)
         const byteLength = new TextEncoder().encode(testChunk).length
 
         if (byteLength > maxBytes) {
@@ -57,17 +65,26 @@ class PaymentService {
     const sanitizeMetadata = (meta) => {
       if (!meta || typeof meta !== 'object') return meta
       const copy = { ...meta }
-      // Chunk the potentially large fields
-      if (copy.contentAfter) copy.contentAfter = chunkString(copy.contentAfter)
-      if (copy.contentBefore) copy.contentBefore = chunkString(copy.contentBefore)
+      // Chunk the potentially large fields (Professor's requirement: 64-byte limit)
+      if (copy.content) copy.content = chunkString(copy.content)  // For CREATE operations
+      if (copy.contentAfter) copy.contentAfter = chunkString(copy.contentAfter)  // For UPDATE operations
+      if (copy.contentBefore) copy.contentBefore = chunkString(copy.contentBefore)  // For UPDATE operations
       if (copy.title) copy.title = chunkString(copy.title)
-      // Generic safeguard: chunk any string fields longer than 200 chars
-      Object.keys(copy).forEach((key) => {
-        if (typeof copy[key] === 'string' && copy[key].length > 200) {
-          copy[key] = chunkString(copy[key])
-        }
-      })
-      return copy
+
+        // Professor's requirement: Ensure ALL string fields are chunked at 64 bytes
+        // Check byte length, not character length
+        Object.keys(copy).forEach((key) => {
+          if (typeof copy[key] === 'string') {
+            const byteLength = new TextEncoder().encode(copy[key]).length
+            if (byteLength > 64) {
+              console.log(`🔀 Chunking ${key}: ${byteLength} bytes → array of chunks`)
+              copy[key] = chunkString(copy[key])
+            } else {
+              console.log(`📝 ${key}: ${byteLength} bytes (no chunking needed)`)
+            }
+          }
+        })
+        return copy
     }
 
     try {
@@ -113,27 +130,34 @@ class PaymentService {
       tx.sendLovelace(recipientAddress, amountLovelace.toString())
 
       // Attach metadata to transaction
-      // Professor's requirement: Use custom label 42819 and specific metadata structure
+      // Professor's requirement: Use IPFS hash in metadata (not note content!)
       if (metadata && Object.keys(metadata).length > 0) {
         const label = 42819 // Custom label for Masikip Notes app
 
-        // Extract note content (use contentAfter for CREATE/UPDATE, contentBefore for DELETE)
-        const noteContent = metadata.contentAfter || metadata.contentBefore || ''
-
-        // Build metadata with professor's required structure
-        const metadataPayload = {
-          action: operation, // CREATE, UPDATE, DELETE (professor uses 'action' not 'operation')
-          note: chunkString(noteContent), // Chunked to 64-byte limit
-          created_at: new Date().toISOString(), // ISO timestamp
+        // Build metadata with actual note content (Professor's requirement #3)
+        // Cardano metadata only supports strings, numbers, and arrays - no complex objects
+        const rawMetadataPayload = {
+          action: operation, // CREATE, UPDATE, DELETE
+          title: metadata.title || '', // Title for metadata
+          content: metadata.content || '', // Content for metadata (Professor's requirement #3)
+          contentBefore: metadata.contentBefore || '', // For UPDATE operations
+          contentAfter: metadata.contentAfter || '', // For UPDATE operations
+          ipfs_hash: metadata.ipfsHash || '', // IPFS hash for fast retrieval
+          timestamp: Date.now().toString(), // Unix timestamp as string
           note_id: metadata.noteId ? metadata.noteId.toString() : null, // Note ID for reference
         }
+
+        // Sanitize and chunk the metadata (Professor's requirement #4)
+        const metadataPayload = sanitizeMetadata(rawMetadataPayload)
 
         // Use Mesh SDK's metadataValue method
         try {
           if (typeof tx.metadataValue === 'function') {
             tx.metadataValue(label, metadataPayload)
-            console.log('Metadata attached to transaction:', metadataPayload)
-            console.log('Note content chunked into', metadataPayload.note.length, 'parts')
+            console.log('✅ Metadata attached to transaction:', metadataPayload)
+            console.log('📦 IPFS hash stored on-chain:', metadataPayload.ipfs_hash)
+            console.log('🔍 Content in metadata:', metadataPayload.content)
+            console.log('📏 Content type:', Array.isArray(metadataPayload.content) ? 'CHUNKED ARRAY' : 'SINGLE STRING')
           } else {
             // Fallback: try alternative method names if available
             if (typeof tx.setMetadata === 'function') {

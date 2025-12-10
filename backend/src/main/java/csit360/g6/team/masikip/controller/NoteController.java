@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/notes")
-@CrossOrigin(origins = "*") 
+@CrossOrigin(origins = "*")
 public class NoteController {
 
     @Autowired
@@ -23,7 +23,10 @@ public class NoteController {
 
     @PostMapping
     public ResponseEntity<Note> createNote(@RequestBody CreateNoteRequest request) {
-        Note createdNote = noteService.createNote(request.getTitle(), request.getContent());
+        Note createdNote = noteService.createNote(
+                request.getTitle(),
+                request.getContent(),
+                request.getTransactionHash());
         return new ResponseEntity<>(createdNote, HttpStatus.CREATED);
     }
 
@@ -46,8 +49,21 @@ public class NoteController {
     }
 
     @PatchMapping("/{id}/priority")
-    public ResponseEntity<Note> updateNotePriority(@PathVariable Long id, @RequestBody UpdateNotePriorityRequest request) {
+    public ResponseEntity<Note> updateNotePriority(@PathVariable Long id,
+            @RequestBody UpdateNotePriorityRequest request) {
         Note updatedNote = noteService.updateNotePriority(id, request.isPinned());
         return ResponseEntity.ok(updatedNote);
+    }
+
+    @PostMapping("/check-pending")
+    public ResponseEntity<Void> checkPendingTransactions() {
+        noteService.updatePendingTransactionStatuses();
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Note> getNoteById(@PathVariable Long id) {
+        Note note = noteService.getNoteById(id);
+        return ResponseEntity.ok(note);
     }
 }

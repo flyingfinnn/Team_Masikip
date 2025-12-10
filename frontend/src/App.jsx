@@ -3,6 +3,7 @@ import { BrowserWallet } from '@meshsdk/core'
 import { Address } from '@emurgo/cardano-serialization-lib-asmjs'
 import NotesPage from './pages/NotesPage'
 import WalletPage from './pages/WalletPage'
+import ServiceTestPage from './pages/ServiceTestPage'
 import './App.css'
 
 const ADA_DIVISOR = 1_000_000
@@ -45,7 +46,7 @@ async function postKoiosJson(baseUrl, path, payload) {
   const proxyUrl = 'https://corsproxy.io/?'
   const targetUrl = `${baseUrl}${path}`
   const fullUrl = `${proxyUrl}${encodeURIComponent(targetUrl)}`
-  
+
   try {
     const response = await fetch(fullUrl, {
       method: 'POST',
@@ -58,14 +59,16 @@ async function postKoiosJson(baseUrl, path, payload) {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error(`Koios API error (${response.status}):`, errorText)
+      // Silently fail for Koios errors - this is a non-critical feature
+      // console.error(`Koios API error (${response.status}):`, errorText)
       throw new Error(`Koios request failed for ${path} (${response.status})`)
     }
     return response.json()
   } catch (error) {
     // If it's a network/CORS error, try without proxy as fallback
     if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
-      console.warn('CORS proxy failed, trying direct request (may fail due to CORS)')
+      // Silently fail - Koios is non-critical
+      // console.warn('CORS proxy failed, trying direct request (may fail due to CORS)')
       try {
         const response = await fetch(targetUrl, {
           method: 'POST',
@@ -322,7 +325,7 @@ async function fetchTransactionHistory(address) {
         if (!txHash) {
           return null // Skip transactions without hash
         }
-        
+
         return {
           id: txHash,
           type: isDebit ? 'debit' : 'credit',
@@ -351,23 +354,23 @@ const getWalletBalanceAda = async (wallet) => {
     // Get UTXOs - this is the most reliable method
     const utxos = await wallet.getUtxos()
     console.log('UTXOs received:', utxos?.length, 'samples:', utxos?.slice(0, 2))
-    
+
     if (!Array.isArray(utxos) || utxos.length === 0) {
       console.warn('No UTXOs found')
       return null
     }
-    
+
     let totalLovelace = 0n
-    
+
     for (const utxo of utxos) {
       // Log first UTXO structure for debugging
       if (totalLovelace === 0n) {
         console.log('Sample UTXO structure:', JSON.stringify(utxo, null, 2))
       }
-      
+
       // Try different UTXO formats
       let lovelace = 0n
-      
+
       // Format 1: utxo.output.amount is an array of objects [{unit: "lovelace", quantity: "..."}, ...]
       if (utxo?.output?.amount && Array.isArray(utxo.output.amount)) {
         // Find the lovelace entry in the array
@@ -408,10 +411,10 @@ const getWalletBalanceAda = async (wallet) => {
       else if (utxo?.output?.value) {
         lovelace = BigInt(utxo.output.value)
       }
-      
+
       totalLovelace += lovelace
     }
-    
+
     const balanceAda = Lovelace.toAda(totalLovelace)
     console.log('Total lovelace:', totalLovelace.toString(), 'ADA:', balanceAda)
     return balanceAda
@@ -509,7 +512,7 @@ function App() {
       try {
         // Reload local transactions from storage to get latest
         const storedLocalTxs = loadStoredTransactions(walletState.address)
-        
+
         // Check for pending transactions older than 2 minutes
         const updatedTxs = storedLocalTxs.map((tx) => {
           if (tx.status === 'pending' && tx.timestamp) {
@@ -523,7 +526,7 @@ function App() {
         })
 
         // Check if any transactions were updated
-        const hasUpdates = updatedTxs.some((tx, idx) => 
+        const hasUpdates = updatedTxs.some((tx, idx) =>
           tx.status === 'confirmed' && storedLocalTxs[idx]?.status === 'pending'
         )
 
@@ -549,7 +552,7 @@ function App() {
           // Even if no updates, recalculate to ensure consistency
           const koiosMetrics = await (walletState.address ? fetchKoiosMetrics(walletState.address).catch(() => ({})) : Promise.resolve({}))
           const { spentAda, pendingFeesAda } = recalculateSpentPending(storedLocalTxs, koiosMetrics)
-          
+
           // Only update if values changed
           setWalletState((prev) => {
             if (prev.spentAda !== spentAda || prev.pendingFeesAda !== pendingFeesAda) {
@@ -568,14 +571,42 @@ function App() {
       }
     }
 
-    // Check immediately
+    // Run status check on mount and then every 30 seconds
     checkTransactionStatuses()
-
-    // Check every 30 seconds for status updates
     const interval = setInterval(checkTransactionStatuses, 30000)
-
     return () => clearInterval(interval)
   }, [walletState.connected, walletState.address])
+
+  // Background worker: Check pending note transactions via backend API
+  useEffect(() => {
+    if (!walletState.connected) return
+
+    const checkPendingNotes = async () => {
+      try {
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
+        await fetch(`${API_URL}/notes/check-pending`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+        console.log('✅ Checked pending note transactions')
+      } catch (error) {
+        // Silently fail - don't spam console with errors
+        if (error.message && !error.message.includes('localhost')) {
+          console.error('❌ Failed to check pending notes:', error)
+        }
+      }
+    }
+
+    // Check immediately on mount
+    checkPendingNotes()
+
+    // Then check every 20 seconds
+    const interval = setInterval(checkPendingNotes, 20000)
+
+    return () => clearInterval(interval)
+  }, [walletState.connected])
 
   // Save active view to localStorage whenever it changes
   useEffect(() => {
@@ -587,7 +618,7 @@ function App() {
     const restoreWalletConnection = async () => {
       const savedWalletName = localStorage.getItem('ledgee_walletName')
       const savedAddress = localStorage.getItem('ledgee_walletAddress')
-      
+
       if (!savedWalletName || !savedAddress) return
 
       try {
@@ -656,7 +687,7 @@ function App() {
 
       // Get available wallets
       const availableWallets = BrowserWallet.getInstalledWallets()
-      
+
       if (availableWallets.length === 0) {
         setWalletState({
           connected: false,
@@ -671,7 +702,7 @@ function App() {
       // Connect to the first available wallet
       const walletName = availableWallets[0].name
       const wallet = await BrowserWallet.enable(walletName)
-      
+
       // Get the address in bech32 format (addr_test...)
       const addresses = await wallet.getUsedAddresses()
       const changeAddresses = await wallet.getChangeAddress()
@@ -783,28 +814,37 @@ function App() {
             >
               Wallet
             </button>
+            <button
+              type="button"
+              className={activeView === 'test' ? 'nav-btn active' : 'nav-btn'}
+              onClick={() => setActiveView('test')}
+            >
+              🧪 Test
+            </button>
           </div>
         </div>
       </nav>
 
       <main className="app-content">
-        {activeView === 'wallet' ? (
-          <WalletPage 
-            walletState={walletState} 
+        {activeView === 'test' ? (
+          <ServiceTestPage />
+        ) : activeView === 'wallet' ? (
+          <WalletPage
+            walletState={walletState}
             fetchTransactionHistory={fetchTransactionHistory}
             onTransactionRecorded={async (transaction) => {
               // Update local transactions in state
               const updatedLocal = [transaction, ...(walletState.localTransactions || [])]
-              
+
               // Save to localStorage first
               if (walletState.address) {
                 saveTransaction(walletState.address, transaction)
               }
-              
+
               // Recalculate spent/pending with updated transactions
               const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
               const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedLocal, koiosMetrics)
-              
+
               setWalletState((prev) => ({
                 ...prev,
                 localTransactions: updatedLocal,
@@ -816,7 +856,7 @@ function App() {
               // Called when WalletPage detects status updates - immediately recalculate
               const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
               const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedTransactions, koiosMetrics)
-              
+
               setWalletState((prev) => ({
                 ...prev,
                 localTransactions: updatedTransactions,
@@ -826,24 +866,24 @@ function App() {
             }}
           />
         ) : (
-          <NotesPage 
-            walletState={walletState} 
+          <NotesPage
+            walletState={walletState}
             onWalletButtonClick={handleWalletButtonClick}
             walletInstance={walletState.walletInstance}
             searchTerm={searchTerm}
             onTransactionRecorded={async (transaction) => {
               // Update local transactions in state
               const updatedLocal = [transaction, ...(walletState.localTransactions || [])]
-              
+
               // Save to localStorage first
               if (walletState.address) {
                 saveTransaction(walletState.address, transaction)
               }
-              
+
               // Recalculate spent/pending with updated transactions
               const koiosMetrics = walletState.address ? await fetchKoiosMetrics(walletState.address).catch(() => ({})) : {}
               const { spentAda, pendingFeesAda } = recalculateSpentPending(updatedLocal, koiosMetrics)
-              
+
               setWalletState((prev) => ({
                 ...prev,
                 localTransactions: updatedLocal,

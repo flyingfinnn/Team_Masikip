@@ -143,7 +143,7 @@ function NotesGallery({
                   {pinnedNotes.map((note) => (
                     <article
                       key={note.id}
-                      className="note-card"
+                      className={`note-card ${note.status === 'pending' ? 'pending' : ''}`}
                       onClick={() => handleNoteClick(note.id)}
                       role="button"
                       tabIndex={0}
@@ -213,7 +213,7 @@ function NotesGallery({
                   {(showPinnedOnly ? pinnedNotes : unpinnedNotes).map((note) => (
                     <article
                       key={note.id}
-                      className="note-card"
+                      className={`note-card ${note.status === 'pending' ? 'pending' : ''}`}
                       onClick={() => handleNoteClick(note.id)}
                       role="button"
                       tabIndex={0}

@@ -10,4 +10,6 @@ public interface NoteRepository extends JpaRepository<Note, Long> {
 
     List<Note> findByIsActiveTrue();
 
+    List<Note> findByStatus(String status);
+
 }

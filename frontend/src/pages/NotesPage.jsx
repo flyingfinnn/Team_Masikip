@@ -6,6 +6,7 @@ import NoteModal from '../components/NoteModal';
 import ToastContainer from '../components/ToastContainer';
 import noteService from '../services/noteService';
 import paymentService from '../services/paymentService';
+import ipfsService from '../services/ipfsService';
 import '../styles/NotesPage.css';
 
 // Service address to receive payments
@@ -75,7 +76,7 @@ const fallbackWalletState = {
   error: null,
 };
 
-function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => {}, walletInstance = null, searchTerm = '', onTransactionRecorded = () => {} }) {
+function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = () => { }, walletInstance = null, searchTerm = '', onTransactionRecorded = () => { } }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
@@ -170,7 +171,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
       // If no local transactions, show all notes (backward compatibility for old notes)
       return notesList;
     }
-    
+
     // Create a map of confirmed CREATE transaction hashes
     const confirmedCreateTxs = new Map();
     localTransactions.forEach(tx => {
@@ -178,13 +179,13 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         confirmedCreateTxs.set(tx.id, true);
       }
     });
-    
+
     return notesList.filter(note => {
       // If note has no transactionHash, show it (old notes or manually created)
       if (!note.transactionHash) {
         return true;
       }
-      
+
       // If note has transactionHash, only show if CREATE transaction is confirmed
       return confirmedCreateTxs.has(note.transactionHash);
     });
@@ -196,9 +197,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     status: getNoteStatus(note, walletState.localTransactions || []),
   }));
 
-  // Filter notes based on search term and confirmation status
-  const confirmedNotes = getConfirmedNotes(notesWithStatus, walletState.localTransactions || []);
-  const filteredNotes = confirmedNotes.filter((note) => {
+  // Filter notes based on search term - show both confirmed and pending notes
+  // Users should see their notes immediately, even when pending confirmation
+  const displayableNotes = notesWithStatus.filter(note => note.status === 'confirmed' || note.status === 'pending');
+  const filteredNotes = displayableNotes.filter((note) => {
     if (!searchTerm) return true;
     const searchLower = searchTerm.toLowerCase();
     const titleMatch = (note.title || '').toLowerCase().includes(searchLower);
@@ -211,38 +213,34 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
     loadNotes();
   }, []);
 
-  // Reload notes when transaction statuses change from pending to confirmed
+  // Periodically check for pending transaction status updates
   useEffect(() => {
-    if (!walletState.localTransactions || walletState.localTransactions.length === 0) {
-      return;
-    }
+    const checkPendingTransactions = async () => {
+      try {
+        await noteService.checkPendingTransactions();
+        // Reload notes after checking status updates
+        await loadNotes();
+      } catch (error) {
+        console.log('Pending transaction check failed (expected if backend unavailable):', error.message);
+      }
+    };
 
-    // Check if any CREATE transactions have been confirmed
-    const hasConfirmedCreate = walletState.localTransactions.some(
-      tx => tx.actionType === 'CREATE' && tx.status === 'confirmed'
-    );
+    // Check immediately on mount
+    checkPendingTransactions();
 
-    if (hasConfirmedCreate) {
-      // Reload notes to show newly confirmed ones
-      const timer = setTimeout(() => {
-        loadNotes();
-      }, 1000); // Small delay to ensure transaction status is updated in localStorage
-      
-      return () => clearTimeout(timer);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletState.localTransactions]); // Re-run when localTransactions array reference changes
+    // Check every 30 seconds for status updates
+    const interval = setInterval(checkPendingTransactions, 30000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const loadNotes = async () => {
     try {
       setLoading(true);
-      console.log('Attempting to load notes from backend...');
       const backendNotes = await noteService.getAllNotes();
-      console.log('Backend notes loaded:', backendNotes);
-      
+
       if (Array.isArray(backendNotes)) {
         const transformedNotes = backendNotes.map(note => noteService.transformNote(note));
-        console.log('Transformed notes:', transformedNotes);
         setNotes(transformedNotes);
       } else {
         console.warn('Backend did not return an array of notes:', backendNotes);
@@ -284,7 +282,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   const updateNote = async (noteId, content) => {
     try {
       console.log('Updating note:', { noteId, contentLength: content.length });
-      
+
       // Don't update deleted notes
       const currentNote = notes.find(note => note.id === noteId);
       if (!currentNote || currentNote.isDeleted) {
@@ -294,38 +292,38 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
       console.log('Current note:', currentNote);
 
-       // Send payment and update via backend API if not a local note
-       let txHash = null;
-       if (!String(noteId).startsWith('local-')) {
-         try {
-           // Prepare metadata for UPDATE operation
-           const updateMetadata = {
-             noteId: noteId.toString(),
-             actionType: 'UPDATE',
-             contentBefore: currentNote?.content || '',
-             contentAfter: content,
-             timestamp: new Date().toISOString(),
-           }
-           
-           txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
-           console.log('Updating note in backend...');
-           await noteService.updateNote(noteId, content, txHash);
-           console.log('Backend update successful');
-         } catch (error) {
-           // Error toast already shown in sendPaymentForOperation
-           throw error;
-         }
-       } else {
-         console.log('Skipping backend update for local note');
-       }
-      
+      // Send payment and update via backend API if not a local note
+      let txHash = null;
+      if (!String(noteId).startsWith('local-')) {
+        try {
+          // Prepare metadata for UPDATE operation
+          const updateMetadata = {
+            noteId: noteId.toString(),
+            actionType: 'UPDATE',
+            contentBefore: currentNote?.content || '',
+            contentAfter: content,
+            timestamp: new Date().toISOString(),
+          }
+
+          txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
+          console.log('Updating note in backend...');
+          await noteService.updateNote(noteId, content, txHash);
+          console.log('Backend update successful');
+        } catch (error) {
+          // Error toast already shown in sendPaymentForOperation
+          throw error;
+        }
+      } else {
+        console.log('Skipping backend update for local note');
+      }
+
       // Update local state immediately for better UX
       const updatedNotes = notes.map(note => {
         if (note.id === noteId) {
           const lines = content.split('\n');
           const title = lines[0] || 'New Note';
           const preview = noteService.generatePreview(content);
-          
+
           return {
             ...note,
             title: title.toUpperCase(),
@@ -338,7 +336,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         return note;
       });
       setNotes(updatedNotes);
-      
+
     } catch (error) {
       console.error('Failed to update note:', error);
       if (!error.message?.includes('cancelled') && !error.message?.includes('Wallet not connected')) {
@@ -350,7 +348,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           const lines = content.split('\n');
           const title = lines[0] || 'New Note';
           const preview = noteService.generatePreview(content);
-          
+
           return {
             ...note,
             title: title.toUpperCase(),
@@ -389,7 +387,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
     // Check if sending to self (testing mode) - need extra for fees
     const isSelfPayment = serviceAddress === walletState.address;
-    
+
     // For DELETE operations sent to self, minimum UTXO requirement is 1 ADA
     // So we need at least 1 ADA + fees (~0.2 ADA) = 1.2 ADA minimum
     let minRequired = requiredAmount;
@@ -422,18 +420,18 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
 
     try {
       showToast(`Processing payment of ${requiredAmount} ADA...`, 'info', 3000);
-      
+
       // Prepare metadata for transaction
       const metadata = {
         ...noteMetadata,
         // Ensure operation is in metadata
         operation: operation,
       }
-      
+
       const txHash = await paymentService.sendPayment(walletInstance, operation, serviceAddress, metadata);
       console.log(`${operation} payment successful:`, txHash);
       showToast(`Payment successful! Transaction: ${txHash.slice(0, 8)}...`, 'success', 5000);
-      
+
       // Record transaction
       const transaction = {
         id: txHash,
@@ -448,7 +446,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         metadata: metadata, // Store metadata for reference
       };
       onTransactionRecorded(transaction);
-      
+
       return txHash;
     } catch (error) {
       console.error(`Payment failed for ${operation}:`, error);
@@ -459,7 +457,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   };
 
   const deleteNote = async (noteId) => {
-		try {
+    try {
       // Send payment for delete operation (even though blockchain data is immutable,
       // we still charge for the DELETE operation to hide the note)
       const currentNote = notes.find(n => n.id === noteId);
@@ -474,7 +472,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
             contentAfter: '',
             timestamp: new Date().toISOString(),
           }
-          
+
           txHash = await sendPaymentForOperation('DELETE', deleteMetadata);
         } catch (error) {
           // Error toast already shown in sendPaymentForOperation
@@ -482,42 +480,42 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
         }
       }
 
-			// Call backend for non-local notes
-			if (!String(noteId).startsWith('local-')) {
-				await noteService.deleteNote(noteId, txHash);
-			}
+      // Call backend for non-local notes
+      if (!String(noteId).startsWith('local-')) {
+        await noteService.deleteNote(noteId, txHash);
+      }
 
-			// Soft delete: Hide note from display (data remains on blockchain)
-			const updatedNotes = notes.map(note => {
-				if (note.id === noteId) {
-					return {
-						...note,
-						isDeleted: true,
-						lastModified: Date.now(),
-						deletedAt: Date.now()
-					};
-				}
-				return note;
-			});
-			setNotes(updatedNotes);
-		} catch (error) {
-			console.error('Failed to delete note:', error);
-			showToast(`Failed to delete note: ${error.message}`, 'error', 4000);
-			// Still update local state even if backend fails
-			const updatedNotes = notes.map(note => {
-				if (note.id === noteId) {
-					return {
-						...note,
-						isDeleted: true,
-						lastModified: Date.now(),
-						deletedAt: Date.now()
-					};
-				}
-				return note;
-			});
-			setNotes(updatedNotes);
-		}
-	};
+      // Soft delete: Hide note from display (data remains on blockchain)
+      const updatedNotes = notes.map(note => {
+        if (note.id === noteId) {
+          return {
+            ...note,
+            isDeleted: true,
+            lastModified: Date.now(),
+            deletedAt: Date.now()
+          };
+        }
+        return note;
+      });
+      setNotes(updatedNotes);
+    } catch (error) {
+      console.error('Failed to delete note:', error);
+      showToast(`Failed to delete note: ${error.message}`, 'error', 4000);
+      // Still update local state even if backend fails
+      const updatedNotes = notes.map(note => {
+        if (note.id === noteId) {
+          return {
+            ...note,
+            isDeleted: true,
+            lastModified: Date.now(),
+            deletedAt: Date.now()
+          };
+        }
+        return note;
+      });
+      setNotes(updatedNotes);
+    }
+  };
 
   const restoreNote = (noteId) => {
     const updatedNotes = notes.map(note => {
@@ -647,43 +645,85 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
   const handleModalSave = async (noteId, content) => {
     try {
       setLoading(true);
-      const title = (content.split('\n')[0] || 'New Note').toString();
-      
+      let title = (content.split('\n')[0] || 'New Note').toString();
+      if (title.length > 100) {
+        title = title.substring(0, 100) + '...';
+      }
+
       if (!noteId || String(noteId).startsWith('local-')) {
-        // Creating new note - send payment first
+        // Creating new note with IPFS integration
+        showToast('📤 Uploading to IPFS...', 'info', 2000);
+
+        // STEP 1: Upload content to IPFS
+        const ipfsHash = await ipfsService.uploadToIPFS(content);
+        console.log('✅ Uploaded to IPFS:', ipfsHash);
+
+        // STEP 2: Prepare metadata with actual note content (Professor's requirement #3)
         const createMetadata = {
           actionType: 'CREATE',
-          contentBefore: '',
-          contentAfter: content,
+          title: title,  // Include actual title for metadata
+          content: content,  // Include actual content for metadata (will be chunked)
+          ipfsHash: ipfsHash,  // IPFS hash for fast retrieval
           timestamp: new Date().toISOString(),
         }
-        
+
+        showToast('💳 Sending blockchain transaction...', 'info', 2000);
+
+        // STEP 3: Send blockchain transaction with IPFS hash
         const txHash = await sendPaymentForOperation('CREATE', createMetadata);
+        console.log('✅ Transaction sent:', txHash);
+
+        showToast('💾 Saving to database...', 'info', 2000);
+
+        // STEP 4: Save to backend with transaction hash
         const created = await noteService.createNote(title, content, txHash);
         await loadNotes();
+
+        showToast('✅ Note created! Pending blockchain confirmation...', 'success', 4000);
+
         if (created && created.id) {
           setSelectedNoteId(created.id);
         }
       } else {
-        // Updating existing note - send payment first
+        // Updating existing note with IPFS integration
+        showToast('📤 Uploading to IPFS...', 'info', 2000);
+
+        // STEP 1: Upload updated content to IPFS
+        const ipfsHash = await ipfsService.uploadToIPFS(content);
+        console.log('✅ Uploaded to IPFS:', ipfsHash);
+
         const currentNote = notes.find(n => n.id === noteId);
+
+        // STEP 2: Prepare metadata with actual content changes (Professor's requirement)
         const updateMetadata = {
           noteId: noteId.toString(),
           actionType: 'UPDATE',
-          contentBefore: currentNote?.content || '',
-          contentAfter: content,
+          contentBefore: currentNote?.content || '',  // Previous content
+          contentAfter: content,  // New content (will be chunked)
+          title: currentNote?.title || '',  // Current title
+          ipfsHash: ipfsHash,  // IPFS hash for fast retrieval
           timestamp: new Date().toISOString(),
         }
-        
+
+        showToast('💳 Sending blockchain transaction...', 'info', 2000);
+
+        // STEP 3: Send blockchain transaction
         const txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
+        console.log('✅ Transaction sent:', txHash);
+
+        showToast('💾 Updating database...', 'info', 2000);
+
+        // STEP 4: Update in backend
         await noteService.updateNote(noteId, content, txHash);
         await loadNotes();
+
+        showToast('✅ Note updated successfully!', 'success', 3000);
         setSelectedNoteId(noteId);
       }
     } catch (err) {
-      console.error('Save failed:', err);
+      console.error('❌ Save failed:', err);
       if (!err.message?.includes('cancelled') && !err.message?.includes('Wallet not connected')) {
-        showToast(`Save failed: ${err.message}`, 'error', 4000);
+        showToast(`❌ Save failed: ${err.message}`, 'error', 4000);
       }
     } finally {
       setLoading(false);
@@ -708,10 +748,10 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           onDeleteNote={deleteNote}
           onTogglePin={togglePin}
           walletState={walletState}
-          />
+        />
       ) : (
         <div className="notes-app">
-          <Sidebar 
+          <Sidebar
             notes={filteredNotes}
             loading={loading}
             onCreateNote={handleCreateNoteClick}
@@ -720,7 +760,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
             walletState={walletState}
             onWalletButtonClick={onWalletButtonClick}
           />
-          <NoteEditor 
+          <NoteEditor
             note={selectedNote}
             onUpdateNote={updateNote}
             onTogglePin={togglePin}
@@ -731,19 +771,69 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
               try {
                 setLoading(true);
                 const title = (content.split('\n')[0] || 'New Note').toString();
+
                 if (!noteId || String(noteId).startsWith('local-')) {
-                  const created = await noteService.createNote(title, content);
+                  // Creating new note with IPFS integration
+                  showToast('📤 Uploading to IPFS...', 'info', 2000);
+
+                  // STEP 1: Upload to IPFS
+                  const ipfsHash = await ipfsService.uploadToIPFS(content);
+                  console.log('✅ Uploaded to IPFS:', ipfsHash);
+
+                  // STEP 2: Prepare metadata with IPFS hash
+                  const createMetadata = {
+                    actionType: 'CREATE',
+                    ipfsHash: ipfsHash,
+                    timestamp: new Date().toISOString(),
+                  }
+
+                  showToast('💳 Sending blockchain transaction...', 'info', 2000);
+
+                  // STEP 3: Send transaction
+                  const txHash = await sendPaymentForOperation('CREATE', createMetadata);
+                  console.log('✅ Transaction sent:', txHash);
+
+                  showToast('💾 Saving to database...', 'info', 2000);
+
+                  // STEP 4: Save to backend
+                  const created = await noteService.createNote(title, content, txHash);
                   await loadNotes();
+
+                  showToast('✅ Note created successfully!', 'success', 3000);
+
                   if (created && created.id) {
                     setSelectedNoteId(created.id);
                   }
                 } else {
-                  await noteService.updateNote(noteId, content);
+                  // Updating existing note with IPFS integration
+                  showToast('📤 Uploading to IPFS...', 'info', 2000);
+
+                  const ipfsHash = await ipfsService.uploadToIPFS(content);
+                  console.log('✅ Uploaded to IPFS:', ipfsHash);
+
+                  const updateMetadata = {
+                    noteId: noteId.toString(),
+                    actionType: 'UPDATE',
+                    ipfsHash: ipfsHash,
+                    timestamp: new Date().toISOString(),
+                  }
+
+                  showToast('💳 Sending blockchain transaction...', 'info', 2000);
+
+                  const txHash = await sendPaymentForOperation('UPDATE', updateMetadata);
+                  console.log('✅ Transaction sent:', txHash);
+
+                  showToast('💾 Updating database...', 'info', 2000);
+
+                  await noteService.updateNote(noteId, content, txHash);
                   await loadNotes();
+
+                  showToast('✅ Note updated successfully!', 'success', 3000);
                   setSelectedNoteId(noteId);
                 }
               } catch (err) {
-                console.error('Save failed:', err);
+                console.error('❌ Save failed:', err);
+                showToast(`❌ Save failed: ${err.message}`, 'error', 4000);
               } finally {
                 setLoading(false);
               }
@@ -751,7 +841,7 @@ function NotesPage({ walletState = fallbackWalletState, onWalletButtonClick = ()
           />
         </div>
       )}
-      
+
       <NoteModal
         isOpen={isModalOpen}
         onClose={handleModalClose}

@@ -4,6 +4,7 @@ import '../styles/NoteModal.css';
 function NoteModal({ isOpen, onClose, note, onSave, onDelete, onSetPriority }) {
   const [content, setContent] = useState('');
   const [priority, setPriority] = useState('Medium');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (note) {
@@ -16,9 +17,17 @@ function NoteModal({ isOpen, onClose, note, onSave, onDelete, onSetPriority }) {
   }, [note]);
 
   const handleSave = async () => {
-    if (onSave) {
-      await onSave(note ? note.id : undefined, content);
-      onClose();
+    if (onSave && !saving) {
+      try {
+        setSaving(true);
+        await onSave(note ? note.id : undefined, content);
+        onClose();
+      } catch (error) {
+        // Keep modal open on error so user can retry
+        console.error('Save failed, keeping modal open:', error);
+      } finally {
+        setSaving(false);
+      }
     }
   };
 
@@ -89,8 +98,12 @@ function NoteModal({ isOpen, onClose, note, onSave, onDelete, onSetPriority }) {
             <button className="modal-btn cancel-btn" onClick={onClose}>
               Cancel
             </button>
-            <button className="modal-btn save-btn" onClick={handleSave}>
-              💾 Save
+            <button
+              className="modal-btn save-btn"
+              onClick={handleSave}
+              disabled={saving}
+            >
+              {saving ? '⏳ Saving...' : '💾 Save'}
             </button>
           </div>
         </div>

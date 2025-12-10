@@ -27,6 +27,7 @@ public class NoteTransaction {
     @Column(nullable = false)
     private LocalDateTime timestamp;
 
+    @Column(columnDefinition = "TEXT")
     private String metadata; // Optional field for other data (e.g., priority change, style)
 
 

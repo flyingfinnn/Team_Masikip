@@ -23,22 +23,50 @@ public class NoteService {
     @Autowired
     private NoteTransactionRepository noteTransactionRepository;
 
+    @Autowired
+    private IPFSService ipfsService;
+
+    @Autowired
+    private BlockfrostService blockfrostService;
+
     /**
-     * Creates a new note and logs the creation as the first transaction in its history.
-     * This method is transactional, meaning both operations (creating the note and its transaction log)
+     * Creates a new note and logs the creation as the first transaction in its
+     * history.
+     * This method is transactional, meaning both operations (creating the note and
+     * its transaction log)
      * must succeed together. If one fails, the other is rolled back.
      */
 
     @Transactional
-    public Note createNote(String title, String content) {
+    public Note createNote(String title, String content, String transactionHash) {
+        // Validate input
+        if (title == null || title.trim().isEmpty()) {
+            throw new IllegalArgumentException("Note title cannot be empty");
+        }
+        if (content == null) {
+            content = ""; // Allow empty content but not null
+        }
+
+        // Upload content to IPFS
+        String ipfsHash;
+        try {
+            ipfsHash = ipfsService.uploadToIPFS(content);
+        } catch (Exception e) {
+            System.err.println("❌ Failed to upload to IPFS: " + e.getMessage());
+            e.printStackTrace();
+            throw new RuntimeException("Failed to upload note to IPFS: " + e.getMessage(), e);
+        }
+
         Note newNote = new Note();
         newNote.setTitle(title);
-        newNote.setContent(content);
+        newNote.setContent(content); // Keep content for backward compatibility
+        newNote.setIpfsHash(ipfsHash); // Store IPFS hash
+        newNote.setTransactionHash(transactionHash);
+        newNote.setStatus("pending"); // Initial status
         newNote.setCreatedAt(LocalDateTime.now());
         newNote.setUpdatedAt(LocalDateTime.now());
         newNote.setActive(true);
         newNote.setPriority("Medium");
-        //newNote.setPinned(false); // Initialize isPinned to false
 
         Note savedNote = noteRepository.save(newNote);
 
@@ -48,14 +76,30 @@ public class NoteService {
         transaction.setContentBefore(null);
         transaction.setContentAfter(content);
         transaction.setTimestamp(LocalDateTime.now());
-        transaction.setMetadata("Note created with title: '" + title + "'");
+        
+        // Build metadata string, truncate title if too long to prevent issues
+        String truncatedTitle = title != null && title.length() > 200 ? title.substring(0, 200) + "..." : title;
+        String metadata = "Note created with title: '" + truncatedTitle + "' | IPFS: " + ipfsHash;
+        if (transactionHash != null && !transactionHash.isEmpty()) {
+            metadata += " | TX: " + transactionHash;
+        }
+        transaction.setMetadata(metadata);
 
         noteTransactionRepository.save(transaction);
 
         return savedNote;
     }
 
+    // Backward compatibility - createNote without transaction hash
+    @Transactional
+    public Note createNote(String title, String content) {
+        return createNote(title, content, null);
+    }
+
     public List<Note> getAllActiveNotes() {
+        // Return notes as-is without IPFS retrieval
+        // IPFS retrieval should only happen when fetching individual notes
+        // This prevents errors for old notes without IPFS hashes
         return noteRepository.findByIsActiveTrue();
     }
 
@@ -127,5 +171,63 @@ public class NoteService {
         noteTransactionRepository.save(transaction);
 
         return updatedNote;
+    }
+
+    /**
+     * Get note by ID with content from IPFS (if available)
+     */
+    public Note getNoteById(Long noteId) {
+        Note note = noteRepository.findById(noteId)
+                .orElseThrow(() -> new EntityNotFoundException("Note not found with id: " + noteId));
+
+        // If IPFS hash exists, try to retrieve content from IPFS
+        if (note.getIpfsHash() != null && !note.getIpfsHash().isEmpty()) {
+            try {
+                String ipfsContent = ipfsService.retrieveFromIPFS(note.getIpfsHash());
+                note.setContent(ipfsContent); // Update content from IPFS
+            } catch (Exception e) {
+                System.err.println("Failed to retrieve from IPFS, using stored content: " + e.getMessage());
+                // Fall back to stored content if IPFS retrieval fails
+            }
+        }
+
+        return note;
+    }
+
+    /**
+     * Update pending transaction statuses using Blockfrost
+     */
+    @Transactional
+    public void updatePendingTransactionStatuses() {
+        try {
+            List<Note> pendingNotes = noteRepository.findByStatus("pending");
+            System.out.println("🔄 Checking " + pendingNotes.size() + " pending transactions...");
+
+            for (Note note : pendingNotes) {
+                if (note.getTransactionHash() != null && !note.getTransactionHash().isEmpty()) {
+                    // Check blockchain transaction status
+                    try {
+                        String status = blockfrostService.checkTransactionStatus(note.getTransactionHash());
+
+                        if ("confirmed".equals(status)) {
+                            note.setStatus("confirmed");
+                            noteRepository.save(note);
+                            System.out.println("✅ Note " + note.getNoteId() + " confirmed via blockchain");
+                        }
+                    } catch (Exception e) {
+                        System.err.println(
+                                "❌ Failed to check blockchain status for note " + note.getNoteId() + ": " + e.getMessage());
+                    }
+                } else {
+                    // No transaction hash - automatically confirm for development/testing
+                    note.setStatus("confirmed");
+                    noteRepository.save(note);
+                    System.out.println("✅ Note " + note.getNoteId() + " auto-confirmed (no transaction hash)");
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Error in updatePendingTransactionStatuses: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 }
