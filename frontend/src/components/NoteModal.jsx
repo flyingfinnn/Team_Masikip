@@ -17,14 +17,20 @@ function NoteModal({ isOpen, onClose, note, onSave, onDelete, onSetPriority }) {
   }, [note]);
 
   const handleSave = async () => {
+    if (!content.trim()) {
+      alert('Note content cannot be empty');
+      return;
+    }
+    
     if (onSave && !saving) {
       try {
         setSaving(true);
-        await onSave(note ? note.id : undefined, content);
+        await onSave(note ? note.id : undefined, content, priority);
         onClose();
       } catch (error) {
         // Keep modal open on error so user can retry
         console.error('Save failed, keeping modal open:', error);
+        alert(`Failed to save note: ${error.message || 'Unknown error'}`);
       } finally {
         setSaving(false);
       }
@@ -41,7 +47,8 @@ function NoteModal({ isOpen, onClose, note, onSave, onDelete, onSetPriority }) {
   const handlePriorityChange = (e) => {
     const newPriority = e.target.value;
     setPriority(newPriority);
-    if (note && onSetPriority) {
+    // Only update priority for existing notes, for new notes it will be set on save
+    if (note?.id && onSetPriority) {
       onSetPriority(note.id, newPriority);
     }
   };
