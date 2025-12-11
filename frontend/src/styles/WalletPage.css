@@ -60,6 +60,29 @@
 .wallet-net strong {
   font-size: 36px;
   color: var(--wallet-highlight);
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .wallet-page__header {
+    flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
+    padding: 24px;
+  }
+
+  .wallet-net {
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding-top: 16px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .wallet-net strong {
+    font-size: 22px;
+  }
 }
 
 .wallet-metrics {
@@ -358,4 +381,3 @@
     align-items: flex-start;
   }
 }
-

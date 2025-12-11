@@ -5,6 +5,8 @@ import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestTemplate;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class BlockfrostService {
@@ -66,5 +68,58 @@ public class BlockfrostService {
      */
     public boolean isTransactionConfirmed(String txHash) {
         return "confirmed".equals(checkTransactionStatus(txHash));
+    }
+
+    /**
+     * Get transaction history for an address
+     */
+    public List<String> getAddressTransactions(String address) {
+        try {
+            String url = apiUrl + "/addresses/" + address + "/transactions?order=desc";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("project_id", projectId);
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<List> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK && response.getBody() != null) {
+                List<Map<String, Object>> txs = response.getBody();
+                return txs.stream()
+                        .map(tx -> (String) tx.get("tx_hash"))
+                        .collect(Collectors.toList());
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Failed to fetch address transactions: " + e.getMessage());
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Get transaction metadata
+     */
+    public List<Map<String, Object>> getTransactionMetadata(String txHash) {
+        try {
+            String url = apiUrl + "/txs/" + txHash + "/metadata";
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("project_id", projectId);
+            HttpEntity<String> entity = new HttpEntity<>(headers);
+
+            ResponseEntity<List> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    entity,
+                    List.class);
+
+            if (response.getStatusCode() == HttpStatus.OK) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            // 404 means no metadata, which is fine
+        }
+        return Collections.emptyList();
     }
 }

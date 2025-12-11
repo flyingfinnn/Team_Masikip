@@ -42,7 +42,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
   const [loadingTxs, setLoadingTxs] = useState(false);
   const [sortBy, setSortBy] = useState(SORT_OPTIONS.NEWEST);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   const isConnected = walletState?.connected === true;
   const walletName = walletState?.walletName || 'Ledgee Vault';
   const displayAddress = walletState?.address || 'No wallet connected';
@@ -80,7 +80,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
 
     // CSV Header with better formatting
     const headers = ['Date & Time', 'Transaction ID', 'Action Type', 'Description', 'Note Content', 'Amount (ADA)', 'Status'];
-    
+
     // CSV Rows with note snippets
     const rows = filtered.map(tx => {
       const date = tx.timestamp ? new Date(tx.timestamp).toLocaleString('en-US', {
@@ -94,7 +94,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
       const txId = tx.id || 'N/A';
       const action = tx.actionType || tx.type || 'N/A';
       const description = tx.label || 'Transaction';
-      
+
       // Extract note content from metadata
       let noteContent = '';
       if (tx.metadata) {
@@ -109,10 +109,10 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
         }
       }
       noteContent = noteContent.replace(/"/g, '""'); // Escape quotes for CSV
-      
+
       const amount = tx.amount ? tx.amount.toFixed(6) : '0.000000';
       const status = (tx.status || 'unknown').toUpperCase();
-      
+
       return [date, txId, action, description, noteContent, amount, status];
     });
 
@@ -126,14 +126,14 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
-    
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T');
     const filename = `Masikip_Transactions_${timestamp[0]}_${timestamp[1].split('-')[0]}.csv`;
-    
+
     link.setAttribute('href', url);
     link.setAttribute('download', filename);
     link.style.visibility = 'hidden';
-    
+
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -162,7 +162,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
           localTransactions.forEach((tx) => {
             localTxMap.set(tx.id, tx);
           });
-          
+
           // Update local transactions with status from Koios and add new ones
           koiosTxs.forEach((tx) => {
             if (localTxMap.has(tx.id)) {
@@ -170,7 +170,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               const localTx = localTxMap.get(tx.id);
               // If Koios says it's confirmed, or it has block_time, it's confirmed
               const isConfirmed = tx.status === 'confirmed' || tx.block_time
-              
+
               if (localTx.status === 'pending' && isConfirmed) {
                 localTx.status = 'confirmed';
                 localTxMap.set(tx.id, localTx);
@@ -198,7 +198,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               localTxMap.set(tx.id, tx);
             }
           });
-          
+
           // Also check pending local transactions - if they're older than 2 minutes, likely confirmed
           let hasStatusUpdates = false;
           localTransactions.forEach((localTx) => {
@@ -216,7 +216,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
                     localTxMap.set(localTx.id, localTx);
                   }
                   hasStatusUpdates = true;
-                  
+
                   // Update localStorage
                   if (walletState?.address) {
                     const stored = localStorage.getItem('masikip_transactions');
@@ -239,7 +239,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               }
             }
           });
-          
+
           // If statuses were updated, trigger a refresh by updating state
           if (hasStatusUpdates) {
             const updatedArray = Array.from(localTxMap.values())
@@ -251,7 +251,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
                   const allTransactions = JSON.parse(stored)
                   allTransactions[walletState.address] = updatedArray
                   localStorage.setItem('masikip_transactions', JSON.stringify(allTransactions))
-                  
+
                   // Trigger parent to recalculate spent/pending immediately
                   if (onStatusUpdate) {
                     onStatusUpdate(updatedArray)
@@ -262,10 +262,10 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               }
             }
           }
-          
+
           // Convert to array, filter out credit transactions, and apply sorting
           const merged = Array.from(localTxMap.values()).filter((tx) => tx.type !== 'credit'); // Only show debit transactions (payments sent)
-          
+
           setTransactions(merged);
           saveCachedTransactions(walletState.address, merged);
           setLoadingTxs(false);
@@ -283,9 +283,9 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
             }
             return tx;
           });
-          
+
           // Update localStorage with confirmed statuses
-          const hasUpdates = updatedLocal.some((tx, idx) => 
+          const hasUpdates = updatedLocal.some((tx, idx) =>
             tx.status === 'confirmed' && localTransactions[idx]?.status === 'pending'
           );
           if (hasUpdates && walletState?.address) {
@@ -307,7 +307,7 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               }
             }
           }
-          
+
           // Filter out credit transactions (only show debit/payments sent)
           const filteredLocal = updatedLocal.filter((tx) => tx.type !== 'credit')
           setTransactions(filteredLocal);
@@ -332,12 +332,12 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
     } else {
       setTransactions([]);
     }
-  }, [isConnected, walletState?.address, fetchTransactionHistory, localTransactions, sortBy]);
+  }, [isConnected, walletState?.address, fetchTransactionHistory, JSON.stringify(localTransactions), sortBy]);
 
   // Sort function
   function sortTransactions(txs, sortOption) {
     const sorted = [...txs];
-    
+
     switch (sortOption) {
       case SORT_OPTIONS.NEWEST:
         return sorted.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -399,8 +399,8 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
             {isConnected && spentAda != null
               ? 'Total spent (Koios + App payments)'
               : isConnected
-              ? 'Loading...'
-              : 'Connect wallet to view'}
+                ? 'Loading...'
+                : 'Connect wallet to view'}
           </small>
         </div>
         <div className="metric-card outline">
@@ -414,8 +414,8 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
             {isConnected && pendingFeesAda != null
               ? 'Pending fees (Koios + App payments)'
               : isConnected
-              ? 'Loading...'
-              : 'Connect wallet to view'}
+                ? 'Loading...'
+                : 'Connect wallet to view'}
           </small>
         </div>
       </div>
@@ -435,8 +435,8 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
               onChange={(e) => setSearchTerm(e.target.value)}
               title="Search by Transaction ID, Action, Details, Amount, Status"
             />
-            <select 
-              value={sortBy} 
+            <select
+              value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
               className="sort-select"
               title="Sort transactions"
@@ -487,23 +487,23 @@ function WalletPage({ walletState = {}, fetchTransactionHistory, onTransactionRe
                   const currency = txn.currency || 'ADA'
                   const status = txn.status || 'unknown'
                   const timestamp = txn.timestamp || new Date().toISOString()
-                  
+
                   // Determine CardanoScan URL based on address network
                   const isTestnet = walletState?.address?.startsWith('addr_test')
-                  const cardanoscanBase = isTestnet 
+                  const cardanoscanBase = isTestnet
                     ? 'https://preview.cardanoscan.io'
                     : 'https://cardanoscan.io'
-                  const cardanoscanUrl = id && id !== 'unknown' 
+                  const cardanoscanUrl = id && id !== 'unknown'
                     ? `${cardanoscanBase}/transaction/${id}`
                     : null
-                  
+
                   return (
                     <div key={id} className="transaction-row">
                       <span className="txn-id" title={id}>
                         {cardanoscanUrl ? (
-                          <a 
-                            href={cardanoscanUrl} 
-                            target="_blank" 
+                          <a
+                            href={cardanoscanUrl}
+                            target="_blank"
                             rel="noopener noreferrer"
                             className="txn-link"
                             onClick={(e) => e.stopPropagation()}

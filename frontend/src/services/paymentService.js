@@ -1,4 +1,5 @@
 import { Transaction } from '@meshsdk/core'
+import { formatContent } from './formatContent'
 
 const PAYMENT_AMOUNTS = {
   CREATE: 0.176985, // 0.176985 ADA to create a note
@@ -29,62 +30,44 @@ class PaymentService {
 
     let amountLovelace = Math.floor(amountAda * ADA_TO_LOVELACE)
 
-    // Professor's requirement: Chunk strings to 64-byte limit for Cardano metadata
-    const chunkString = (value, maxBytes = 64) => {
-      if (typeof value !== 'string' || !value) return value
-
-      // Check total byte length
-      const totalBytes = new TextEncoder().encode(value).length
-
-      // CASE 1: SHORT STRING (FITS IN ONE CHUNK) - return as single string
-      if (totalBytes <= maxBytes) {
-        return value
-      }
-
-      // CASE 2: LONG STRING (NEEDS SPLITTING) - return array of chunks
-      const chunks = []
-      let currentChunk = ''
-
-      // Iterate through each character and build chunks by byte count
-      for (const char of value) {
-        const testChunk = currentChunk + char
-        const byteLength = new TextEncoder().encode(testChunk).length
-
-        if (byteLength > maxBytes) {
-          if (currentChunk) chunks.push(currentChunk)
-          currentChunk = char
-        } else {
-          currentChunk = testChunk
-        }
-      }
-
-      if (currentChunk) chunks.push(currentChunk)
-      return chunks
-    }
-
     const sanitizeMetadata = (meta) => {
       if (!meta || typeof meta !== 'object') return meta
       const copy = { ...meta }
-      // Chunk the potentially large fields (Professor's requirement: 64-byte limit)
-      if (copy.content) copy.content = chunkString(copy.content)  // For CREATE operations
-      if (copy.contentAfter) copy.contentAfter = chunkString(copy.contentAfter)  // For UPDATE operations
-      if (copy.contentBefore) copy.contentBefore = chunkString(copy.contentBefore)  // For UPDATE operations
-      if (copy.title) copy.title = chunkString(copy.title)
+      
+      // Professor's requirement: Ensure ALL string fields are chunked at 64 bytes
+      // We use the centralized helper function for this
+      if (copy.content) copy.content = formatContent(copy.content)
+      if (copy.contentAfter) copy.contentAfter = formatContent(copy.contentAfter)
+      if (copy.contentBefore) copy.contentBefore = formatContent(copy.contentBefore)
+      
+      // Also check title just in case it's long
+      if (copy.title) {
+        const titleChunks = formatContent(copy.title)
+        // If title fits in one chunk (string), keep it as string. If multiple (array), use array.
+        // Note: formatContent always returns array. For title, if it's short, we usually want a simple string
+        // unless it strictly needs to be valid metadata. 
+        // Mesh/Cardano handles [ "string" ] fine as a list of strings.
+        // But for title, typically we keep it simple if possible.
+        // However, to be safe and consistent with "REQUIRED to implement chunking", we use the helper output.
+        // To be nicer to the UI/Indexers, if it's 1 chunk, we *could* unwrap it, but
+        // the requirement says "returns a list" in the sample. 
+        // Let's stick to the behavior: formatContent returns string[]
+        copy.title = titleChunks.length === 1 ? titleChunks[0] : titleChunks
+      }
 
-        // Professor's requirement: Ensure ALL string fields are chunked at 64 bytes
-        // Check byte length, not character length
-        Object.keys(copy).forEach((key) => {
-          if (typeof copy[key] === 'string') {
-            const byteLength = new TextEncoder().encode(copy[key]).length
-            if (byteLength > 64) {
-              console.log(`🔀 Chunking ${key}: ${byteLength} bytes → array of chunks`)
-              copy[key] = chunkString(copy[key])
-            } else {
-              console.log(`📝 ${key}: ${byteLength} bytes (no chunking needed)`)
-            }
+      // Automatically chunk any other string properties that are too long
+      Object.keys(copy).forEach((key) => {
+        if (typeof copy[key] === 'string' && !['content', 'contentAfter', 'contentBefore', 'title'].includes(key)) {
+          const val = copy[key]
+          // Quick check before invoking helper (optimization)
+          if (new TextEncoder().encode(val).length > 64) {
+             console.log(`🔀 Chunking ${key} using helper`)
+             copy[key] = formatContent(val)
           }
-        })
-        return copy
+        }
+      })
+      
+      return copy
     }
 
     try {

@@ -499,8 +499,8 @@ function App() {
     const totalPending = (koiosMetrics?.pendingFeesAda ?? 0) + localPending
 
     return {
-      spentAda: totalSpent > 0 ? totalSpent : null,
-      pendingFeesAda: totalPending > 0 ? totalPending : null,
+      spentAda: totalSpent,
+      pendingFeesAda: totalPending,
     }
   }
 
@@ -819,7 +819,7 @@ function App() {
               className={activeView === 'test' ? 'nav-btn active' : 'nav-btn'}
               onClick={() => setActiveView('test')}
             >
-              🧪 Test
+              Test
             </button>
           </div>
         </div>
@@ -827,7 +827,7 @@ function App() {
 
       <main className="app-content">
         {activeView === 'test' ? (
-          <ServiceTestPage />
+          <ServiceTestPage walletState={walletState} />
         ) : activeView === 'wallet' ? (
           <WalletPage
             walletState={walletState}

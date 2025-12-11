@@ -179,3 +179,76 @@ body {
   flex: 1;
   min-height: 0;
 }
+
+/* Responsive Navigation */
+@media (max-width: 1024px) {
+  .app-nav {
+    padding: 0 20px;
+  }
+  
+  .nav-search .search-input {
+    width: 200px;
+  }
+  
+  .brand-tagline {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-nav {
+    padding: 0 16px;
+    gap: 12px;
+  }
+  
+  .nav-brand {
+    gap: 12px;
+  }
+  
+  .nav-search {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+  }
+  
+  .nav-search .search-input {
+    width: 100%;
+    min-width: 0;
+  }
+  
+  /* Hide search icon on very small screens if needed, 
+     but usually shrinking input is enough */
+  
+  .nav-actions {
+    gap: 8px;
+  }
+  
+  .nav-btn {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  
+  .nav-btn.wallet-connect {
+    padding: 8px 12px;
+    font-size: 12px;
+    max-width: 140px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    display: block;
+  }
+}
+
+@media (max-width: 600px) {
+  /* On very small screens (mobile), hide brand title text if needed to make room for search */
+  .brand-title {
+    font-size: 0; /* Hide text but keep dot */
+  }
+  .brand-title .brand-dot {
+    display: block; /* Keep dot visible */
+  }
+  
+  .nav-search {
+    margin: 0 8px;
+  }
+}

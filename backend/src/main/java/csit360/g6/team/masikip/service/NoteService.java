@@ -12,7 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+import java.util.*;
 
 @Service
 public class NoteService {
@@ -76,7 +76,7 @@ public class NoteService {
         transaction.setContentBefore(null);
         transaction.setContentAfter(content);
         transaction.setTimestamp(LocalDateTime.now());
-        
+
         // Build metadata string, truncate title if too long to prevent issues
         String truncatedTitle = title != null && title.length() > 200 ? title.substring(0, 200) + "..." : title;
         String metadata = "Note created with title: '" + truncatedTitle + "' | IPFS: " + ipfsHash;
@@ -216,7 +216,8 @@ public class NoteService {
                         }
                     } catch (Exception e) {
                         System.err.println(
-                                "❌ Failed to check blockchain status for note " + note.getNoteId() + ": " + e.getMessage());
+                                "❌ Failed to check blockchain status for note " + note.getNoteId() + ": "
+                                        + e.getMessage());
                     }
                 } else {
                     // No transaction hash - automatically confirm for development/testing
@@ -229,5 +230,144 @@ public class NoteService {
             System.err.println("❌ Error in updatePendingTransactionStatuses: " + e.getMessage());
             e.printStackTrace();
         }
+    }
+
+    /**
+     * Restore notes from blockchain for a specific wallet address
+     */
+    @Transactional
+    public int restoreNotesFromBlockchain(String walletAddress) {
+        System.out.println("🔄 Starting blockchain restoration for address: " + walletAddress);
+        int restoredCount = 0;
+
+        try {
+            // 1. Get all transactions for the address
+            List<String> txHashes = blockfrostService.getAddressTransactions(walletAddress);
+            System.out.println("📝 Found " + txHashes.size() + " transactions on-chain");
+
+            for (String txHash : txHashes) {
+                // 2. Check if we already have this transaction linked to a note
+                // Use a custom query if performance becomes an issue, but for now simple check
+                // is fine
+                boolean exists = false;
+                List<Note> allNotes = noteRepository.findAll();
+                for (Note n : allNotes) {
+                    if (txHash.equals(n.getTransactionHash())) {
+                        exists = true;
+                        break;
+                    }
+                }
+
+                if (exists) {
+                    continue; // Skip if already exists
+                }
+
+                // 3. Fetch metadata for the transaction
+                List<Map<String, Object>> metadataList = blockfrostService.getTransactionMetadata(txHash);
+
+                // 4. Parse metadata to find our Note data
+                // Structure expected: Label 42819 -> JSON Object
+                // { action, title, content, ipfs_hash, ... }
+
+                for (Map<String, Object> meta : metadataList) {
+                    // Check for our custom application label
+                    if ("42819".equals(String.valueOf(meta.get("label")))) {
+                        Object jsonMetadata = meta.get("json_metadata");
+
+                        if (jsonMetadata instanceof Map) {
+                            Map<String, Object> jsonMap = (Map<String, Object>) jsonMetadata;
+
+                            // Check if this is a valid note transaction
+                            String action = (String) jsonMap.get("action");
+                            if (action == null)
+                                continue; // Not a note transaction we recognize
+
+                            try {
+                                // Extract and Reassemble Content
+                                String title = extractStringContent(jsonMap.get("title"));
+                                String content = extractStringContent(jsonMap.get("content"));
+                                String ipfsHash = extractStringContent(jsonMap.get("ipfs_hash"));
+
+                                // Default title if missing
+                                if (title == null || title.isEmpty()) {
+                                    title = content.split("\n")[0];
+                                    if (title.length() > 50)
+                                        title = title.substring(0, 50) + "...";
+                                }
+
+                                // Create restored note
+                                Note restoredNote = new Note();
+                                restoredNote.setTransactionHash(txHash);
+                                restoredNote.setIpfsHash(ipfsHash);
+                                restoredNote.setTitle(title);
+                                restoredNote.setContent(content);
+                                restoredNote.setStatus("confirmed");
+                                restoredNote.setActive(!"DELETE".equalsIgnoreCase(action)); // Mark deleted notes as
+                                                                                            // inactive
+
+                                // Set timestamp (approximate from now if not in metadata)
+                                String tsStr = extractStringContent(jsonMap.get("timestamp"));
+                                if (tsStr != null && !tsStr.isEmpty()) {
+                                    try {
+                                        long epoch = Long.parseLong(tsStr);
+                                        restoredNote.setCreatedAt(new java.sql.Timestamp(epoch).toLocalDateTime());
+                                    } catch (Exception e) {
+                                    }
+                                }
+                                if (restoredNote.getCreatedAt() == null) {
+                                    restoredNote.setCreatedAt(LocalDateTime.now());
+                                }
+                                restoredNote.setUpdatedAt(restoredNote.getCreatedAt());
+                                restoredNote.setPriority("Medium");
+
+                                noteRepository.save(restoredNote);
+
+                                // Create transaction log
+                                NoteTransaction trans = new NoteTransaction();
+                                trans.setNoteId(restoredNote.getNoteId());
+                                trans.setActionType(ActionType.valueOf(action.toUpperCase() + "_NOTE"));
+                                trans.setContentAfter(content);
+                                trans.setTimestamp(LocalDateTime.now());
+                                trans.setMetadata("Restored from Blockchain (Label 42819)");
+                                noteTransactionRepository.save(trans);
+
+                                restoredCount++;
+                                System.out.println(
+                                        "♻️ Restored note " + restoredNote.getNoteId() + " from TX: " + txHash);
+
+                            } catch (Exception e) {
+                                System.err.println("Failed to parse metadata for TX " + txHash + ": " + e.getMessage());
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("❌ Restoration failed: " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        return restoredCount;
+    }
+
+    /**
+     * Helper to extract content that might be a string or a list of strings
+     * (chunked)
+     */
+    private String extractStringContent(Object obj) {
+        if (obj == null)
+            return "";
+        if (obj instanceof String)
+            return (String) obj;
+        if (obj instanceof List) {
+            List<?> list = (List<?>) obj;
+            StringBuilder sb = new StringBuilder();
+            for (Object item : list) {
+                if (item != null)
+                    sb.append(item.toString());
+            }
+            return sb.toString();
+        }
+        return obj.toString();
     }
 }

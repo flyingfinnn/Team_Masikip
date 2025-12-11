@@ -3,7 +3,7 @@ import ipfsService from '../services/ipfsService';
 import blockfrostService from '../services/blockfrostService';
 import './ServiceTestPage.css';
 
-const ServiceTestPage = () => {
+const ServiceTestPage = (props) => {
     const [ipfsContent, setIpfsContent] = useState('');
     const [ipfsHash, setIpfsHash] = useState('');
     const [retrievedContent, setRetrievedContent] = useState('');
@@ -78,10 +78,93 @@ const ServiceTestPage = () => {
         }
     };
 
+    // Blockchain Restoration
+    const [restoreStatus, setRestoreStatus] = useState('');
+    const [restoredCount, setRestoredCount] = useState(0);
+
+    const handleSyncFromBlockchain = async () => {
+        const walletAddress = props.walletState?.address;
+        if (!walletAddress) {
+            setError('Please connect a wallet first');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+        setRestoreStatus('Starting sync...');
+
+        try {
+            // Handle API URL construction robustly
+            let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+            // Remove trailing slash if present
+            baseUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+            // Remove trailing /api if present to avoid duplication, or just ensure we don't duplicate
+            // If baseUrl ends with /api, we should not append /api/restore, just /restore
+            const endpoint = baseUrl.endsWith('/api')
+                ? `${baseUrl}/restore`
+                : `${baseUrl}/api/restore`;
+
+            console.log('Syncing from blockchain for:', walletAddress);
+            console.log('Using endpoint:', endpoint);
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ walletAddress }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setRestoreStatus('Sync Complete');
+                setRestoredCount(data.restoredCount || 0);
+                console.log('✅ Restoration successful:', data);
+            } else {
+                throw new Error(data.error || 'Restoration failed');
+            }
+        } catch (err) {
+            console.error('❌ Restoration failed:', err);
+            setError(`Restoration failed: ${err.message}`);
+            setRestoreStatus('Failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="service-test-page">
             <h1>🧪 Service Testing Dashboard</h1>
             <p className="subtitle">Test IPFS and Blockfrost services</p>
+
+            {/* Blockchain Restoration */}
+            <section className="test-section">
+                <h2>♻️ Blockchain Restoration (Source of Truth)</h2>
+                <div className="test-controls">
+                    <p>Simulate a "Fresh Install" by restoring notes from the blockchain history.</p>
+                    <div className="config-item" style={{ marginBottom: '1rem' }}>
+                        <strong>Connected Wallet:</strong>
+                        <code>{props.walletState?.address || 'Not Connected'}</code>
+                    </div>
+
+                    <button
+                        onClick={handleSyncFromBlockchain}
+                        disabled={loading || !props.walletState?.address}
+                        className="btn-primary"
+                        style={{ background: '#35c695' }}
+                    >
+                        {loading ? '⏳ Syncing...' : '🔄 Sync from Chain'}
+                    </button>
+
+                    {restoreStatus && (
+                        <div className="result-box">
+                            <strong>Status:</strong> {restoreStatus} <br />
+                            <strong>Restored Notes:</strong> {restoredCount}
+                        </div>
+                    )}
+                </div>
+            </section>
 
             {error && (
                 <div className="error-banner">
